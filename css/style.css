@@ -32,18 +32,10 @@ footer .brand-logo{height:40px}
 .t-meta{display:flex;gap:26px;flex-wrap:wrap;font-size:9px;letter-spacing:1.5px;color:#999}.t-meta b{color:var(--gold);margin-left:6px;font-size:12px}
 .champion{margin-top:16px;color:var(--gold);font-weight:800;letter-spacing:1.5px;font-size:12px}
 .prose{color:#a1a5aa;font-size:13px;line-height:1.9;max-width:720px}.hint{color:#666;font-size:10px;letter-spacing:1px}
-.bracket-wrap{overflow-x:auto;padding-bottom:12px}.bracket{display:flex;gap:56px;min-width:max-content}
-.b-round{display:flex;flex-direction:column;width:250px}.b-title{font-size:10px;letter-spacing:2px;color:var(--gold);font-weight:800;margin-bottom:14px}
-.b-matches{display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:18px}
-.b-match{position:relative;background:#141619;border:1px solid var(--line)}
-.b-match:not(:last-child):after,.b-round:not(:last-child) .b-match:after{content:"";position:absolute;right:-29px;top:50%;width:28px;border-top:1px solid #3a3f44}
-.b-round:last-child .b-match:after{display:none}
-.b-match.is-live{border-color:var(--red);box-shadow:0 0 18px #e12b3640}
 .slot{display:flex;align-items:center;gap:10px;padding:8px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#cfd2d5}
 .slot+.slot{border-top:1px solid var(--line)}.slot:hover{background:#1c1f23}.slot.tbd{cursor:default;color:#555}.slot.tbd:hover{background:none}
 .slot.win{background:#1d1a12;color:var(--gold)}.slot .team-emblem{width:26px;height:26px;font-size:12px;flex:none}
 .slot-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.slot b{font:900 18px 'Barlow Condensed'}
-.b-foot{font-size:8px;letter-spacing:1.2px;color:#777;padding:6px 10px;border-top:1px solid var(--line)}
 /* admin */
 .admin-main{padding:30px 5%}.admin-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:18px;align-items:start}
 .a-card{background:#141619;border:1px solid var(--line);padding:24px}.a-card h3{font:800 24px 'Barlow Condensed';letter-spacing:1px;margin:0 0 16px}
@@ -67,7 +59,31 @@ footer .brand-logo{height:40px}
 .group-title{grid-column:1/-1;font:800 26px 'Barlow Condensed';letter-spacing:1px;margin:14px 0 2px;text-transform:uppercase;color:var(--gold)}.group-title small{font:700 9px Inter;letter-spacing:1.5px;color:#777;margin-left:10px}
 .group-title:first-child{margin-top:0}
 .admin-bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}.admin-bar a{border:1px solid var(--red);color:#ff8a91;font-size:10px;letter-spacing:1px;padding:8px 12px;font-weight:800}
-.b-edit{display:flex;gap:5px;align-items:center;padding:8px;border-top:1px dashed var(--red);background:#1a0f11}
-.b-edit .sc{width:44px;padding:6px;background:#0c0e10;border:1px solid #34383c;color:#fff;text-align:center}.b-edit select{flex:1;min-width:0;padding:6px;background:#0c0e10;border:1px solid #34383c;color:#fff;font-size:10px}
-.b-edit button{background:var(--red);color:#fff;border:0;padding:7px 9px;font:800 9px Inter;cursor:pointer}
 @media(max-width:600px){.mode-btn{padding:9px;font-size:8px;margin-right:6px}}
+
+.toast{cursor:pointer;max-width:min(520px,90vw);line-height:1.5;z-index:200}
+
+/* bracket (gaya Challonge: konektor siku) */
+.bracket-wrap{overflow-x:auto;padding-bottom:12px}
+.bracket{display:flex;align-items:stretch;gap:56px;min-width:max-content;--lc:#4a5056}
+.b-round{display:flex;flex-direction:column;width:250px}
+.b-title{font-size:10px;letter-spacing:2px;color:var(--gold);font-weight:800;margin-bottom:10px;height:16px}.b-title small{color:#777;margin-left:6px;letter-spacing:1px}
+.b-matches{flex:1;display:flex;flex-direction:column}
+.b-item{flex:1 1 0;min-height:132px;display:flex;align-items:center;position:relative;padding:8px 0}
+.bracket.adm .b-item{min-height:196px}
+.b-match{position:relative;width:100%;background:#141619;border:1px solid var(--line)}
+.b-match.is-live{border-color:var(--red);box-shadow:0 0 18px #e12b3640}
+.b-head{display:flex;justify-content:space-between;padding:5px 10px;font-size:8px;letter-spacing:1.4px;color:var(--gold);font-weight:800;border-bottom:1px solid var(--line);background:#101214}
+.b-foot{font-size:8px;letter-spacing:1.2px;color:#777;padding:6px 10px;border-top:1px solid var(--line)}
+.b-round:not(.is-last) .b-item:after{content:"";position:absolute;right:-28px;width:28px;top:50%;border-top:2px solid var(--lc)}
+.b-round:not(.is-last) .b-item:before{content:"";position:absolute;right:-28px;border-right:2px solid var(--lc)}
+.b-round:not(.is-last) .b-item:nth-child(odd):before{top:50%;bottom:0}
+.b-round:not(.is-last) .b-item:nth-child(even):before{top:0;bottom:50%}
+.b-round:not(:first-child) .b-match:before{content:"";position:absolute;left:-28px;width:28px;top:50%;border-top:2px solid var(--lc)}
+.b-edit{display:flex;gap:6px;padding:7px 8px;border-top:1px dashed var(--red);background:#1a0f11}
+.b-edit select{flex:1;min-width:0;padding:6px;background:#0c0e10;border:1px solid #34383c;color:#fff;font-size:11px}
+.b-edit button{background:var(--red);color:#fff;border:0;padding:7px 12px;font:800 9px Inter;cursor:pointer}
+a.match-card{color:inherit}a.match-card:hover{border-color:#57452d}
+.m-no{font:800 11px Inter;color:var(--gold);width:34px}
+.m-row{grid-template-columns:36px 1fr 96px 1fr 84px 190px auto!important}.m-st{font-size:9px;letter-spacing:1px;color:#888;text-align:center}
+@media(max-width:1000px){.m-row{grid-template-columns:36px 1fr 90px 1fr!important}.m-row .m-st,.m-row input[type=datetime-local],.m-row button{grid-column:span 4}}
