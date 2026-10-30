@@ -22,8 +22,21 @@
     ? `<span class="team-emblem ${cls}"><img src="${esc(t.logo_url)}" alt=""></span>`
     : `<span class="team-emblem ${cls}">${esc((t?.tag || t?.name || "?").slice(0, 2).toUpperCase())}</span>`;
 
+  // Kecilkan gambar besar (foto HP) sebelum upload agar cepat.
+  async function shrink(file, max = 1400) {
+    try {
+      if (!file.type.startsWith("image/") || file.type === "image/svg+xml" || file.size < 300000) return file;
+      const bmp = await createImageBitmap(file);
+      const s = Math.min(1, max / Math.max(bmp.width, bmp.height));
+      const cv = document.createElement("canvas"); cv.width = Math.round(bmp.width * s); cv.height = Math.round(bmp.height * s);
+      cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise(r => cv.toBlob(r, "image/webp", 0.88));
+      return blob && blob.type === "image/webp" ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".webp", { type: "image/webp" }) : file;
+    } catch { return file; }
+  }
   async function uploadImage(file, folder) {
     if (!file) return null;
+    file = await shrink(file);
     const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const { error } = await client.storage.from("ares-media").upload(path, file, { upsert: false, contentType: file.type });

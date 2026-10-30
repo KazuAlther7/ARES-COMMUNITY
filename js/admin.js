@@ -5,12 +5,24 @@
   const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination (bracket otomatis belum tersedia)", round_robin: "Round Robin (bracket otomatis belum tersedia)", group_playoffs: "Group Stage + Playoffs (bracket otomatis belum tersedia)" };
   let tab = "tournaments", tournaments = [], selT = "";
 
-  const toast = (m, bad) => { const t = $("toast"); t.textContent = m; t.className = "toast" + (bad ? " bad" : ""); t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3500); };
+  const fmtErr = (e) => [e?.message, e?.details, e?.hint, e?.code && `(${e.code})`].filter(Boolean).join(" — ") || String(e);
+  const toast = (m, bad) => { const t = $("toast"); t.textContent = m; t.className = "toast" + (bad ? " bad" : ""); t.hidden = false; t.onclick = () => t.hidden = true; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, bad ? 15000 : 3500); };
+  let warns = [];
+  const safeUpload = async (file, folder) => {
+    try { return await Promise.race([uploadImage(file, folder), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout 25 dtk")), 25000))]); }
+    catch (e) { warns.push(`gambar ${file.name} gagal diupload: ${fmtErr(e)}`); return undefined; }
+  };
+  const done = (msg) => { toast(msg + (warns.length ? " — PERINGATAN: " + warns.join("; ") : ""), warns.length > 0); warns = []; };
   const opts = (arr, sel, blank) => (blank ? `<option value="">${blank}</option>` : "") + arr.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(l)}</option>`).join("");
   const tOpts = (sel, blank) => opts(tournaments.map(t => [t.id, t.name]), sel, blank);
   const dtLocal = (s) => { if (!s) return ""; const d = new Date(s); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
   const fromLocal = (s) => s ? new Date(s).toISOString() : null;
-  const run = async (fn) => { try { await fn(); } catch (e) { console.error(e); toast(e.message || String(e), true); } };
+  const run = async (fn, btn) => {
+    const old = btn?.textContent; if (btn) { btn.disabled = true; btn.textContent = "SAVING…"; }
+    try { await fn(); } catch (e) { console.error(e); toast(fmtErr(e), true); }
+    finally { if (btn?.isConnected) { btn.disabled = false; btn.textContent = old; } }
+  };
+  window.addEventListener("unhandledrejection", (ev) => toast(fmtErr(ev.reason), true));
 
   if (!sb) { $("login-view").hidden = false; $("login-message").textContent = "Supabase belum dikonfigurasi (js/config.js)."; return; }
 
@@ -57,15 +69,20 @@
       <div class="row2"><label>Logo<input name="logo" type="file" accept="image/*"></label><label>Banner<input name="banner" type="file" accept="image/*"></label></div>
       <button class="btn-primary" type="submit">${t.id ? "SAVE CHANGES" : "CREATE TOURNAMENT"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tcancel">CANCEL</button>' : ""}</form>
     <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate bracket</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
-    $("tf").onsubmit = (e) => { e.preventDefault(); run(async () => {
+    $("tf").onsubmit = (e) => { e.preventDefault(); const btn = e.submitter; run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), format: f.get("format"), status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
-      const lf = f.get("logo"), bf = f.get("banner");
-      if (lf?.size) row.logo_url = await uploadImage(lf, "tournaments");
-      if (bf?.size) row.banner_url = await uploadImage(bf, "tournaments");
-      const { error } = t.id ? await sb.from("tournaments").update(row).eq("id", t.id) : await sb.from("tournaments").insert(row);
-      if (error) throw error; toast("Tersimpan"); render();
-    }); };
+      let id = t.id;
+      if (id) { const { error } = await sb.from("tournaments").update(row).eq("id", id); if (error) throw error; }
+      else { const { data, error } = await sb.from("tournaments").insert(row).select("id").single(); if (error) throw error; id = data.id; }
+      const img = {}, lf = f.get("logo"), bf = f.get("banner");
+      if (btn && (lf?.size || bf?.size)) btn.textContent = "UPLOADING…";
+      if (lf?.size) { const u = await safeUpload(lf, "tournaments"); if (u) img.logo_url = u; }
+      if (bf?.size) { const u = await safeUpload(bf, "tournaments"); if (u) img.banner_url = u; }
+      if (Object.keys(img).length) { const { error } = await sb.from("tournaments").update(img).eq("id", id); if (error) throw error; }
+      if (t.id) { done("Tersimpan"); render(); }
+      else { done("Turnamen dibuat — tambahkan tim di sini"); goTab("teams", id); }
+    }, btn); };
     if (t.id) $("tcancel").onclick = () => renderTournaments();
     $("panel").onclick = (e) => { const b = e.target.closest("[data-act]"); if (!b) return; const x = tournaments.find(z => z.id === b.dataset.id);
       if (b.dataset.act === "edit") { renderTournaments(x); scrollTo(0, 0); }
@@ -118,7 +135,7 @@
         const tt = tournaments.find(z => z.id === row.tournament_id), n = teams.filter(z => z.tournament_id === row.tournament_id).length;
         if (tt?.max_teams && n >= tt.max_teams) throw new Error(`Turnamen penuh (${tt.max_teams} tim).`);
       }
-      const lf = f.get("logo"); if (lf?.size) row.logo_url = await uploadImage(lf, "teams");
+      const lf = f.get("logo"); if (lf?.size) row.logo_url = await safeUpload(lf, "teams");
       let id = t.id;
       if (id) { const { error } = await sb.from("teams").update(row).eq("id", id); if (error) throw error; }
       else { const { data, error } = await sb.from("teams").insert(row).select("id").single(); if (error) throw error; id = data.id; }
@@ -127,8 +144,8 @@
         pl.push({ team_id: id, nickname: n, role: f.get("role" + i) || null, is_sub: i >= 5, is_captain: i < 5 && cap === String(i), sort_order: i }); }
       await sb.from("players").delete().eq("team_id", id);
       if (pl.length) { const { error } = await sb.from("players").insert(pl); if (error) throw error; }
-      toast("Tim tersimpan"); renderTeams();
-    }); };
+      done("Tim tersimpan"); renderTeams();
+    }, e.submitter); };
     if (t.id) $("tmcancel").onclick = () => renderTeams();
     $("panel").onclick = (e) => { const b = e.target.closest("[data-act]"); if (!b) return; const x = teams.find(z => z.id === b.dataset.id);
       if (b.dataset.act === "edit") run(async () => { const { data } = await sb.from("players").select("*").eq("team_id", x.id).order("sort_order"); renderTeams(x, data || []); scrollTo(0, 0); });
