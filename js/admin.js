@@ -155,22 +155,26 @@
 
   // ---------- Matches ----------
   async function renderMatches() {
+    const cur = tournaments.find(x => x.id === selT);
     const { data: ms } = selT ? await sb.from("matches").select("*, team1:teams!matches_team1_id_fkey(id,name), team2:teams!matches_team2_id_fkey(id,name)").eq("tournament_id", selT).order("round").order("position") : { data: [] };
+    ARES.annotate(ms || [], cur?.status);
     const byRound = {}; (ms || []).forEach(m => (byRound[m.round] ||= []).push(m));
     $("panel").innerHTML = `<div class="a-card"><h3>MATCHES</h3><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
-      ${Object.keys(byRound).sort((a, b) => a - b).map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)}</div>${byRound[r].map(m => `<div class="m-row" data-id="${m.id}">
-        <div class="m-team">${esc(m.team1?.name || "TBD")}</div><input class="sc" type="number" min="0" name="s1" value="${m.score1 ?? 0}">
-        <span>:</span><input class="sc" type="number" min="0" name="s2" value="${m.score2 ?? 0}"><div class="m-team r">${esc(m.team2?.name || (m.is_bye ? "BYE" : "TBD"))}</div>
-        <select name="status">${opts([["scheduled", "Scheduled"], ["live", "Live"], ["completed", "Completed"]], m.status)}</select>
-        <input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}"><button class="btn-primary sm" data-save ${m.is_bye || !m.team1_id || !m.team2_id ? "disabled" : ""}>SAVE</button></div>`).join("")}`).join("") || '<div class="empty-state">Belum ada match. Buat bracket dari menu Tournaments.</div>'}</div>`;
+      ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (Final Bo5, Semi Final Bo3, lainnya Bo1).</small>` : ""}
+      ${Object.keys(byRound).sort((a, b) => a - b).map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
+        <div class="m-no">${m.is_bye ? "BYE" : "#" + m._no}</div><div class="m-team">${esc(m.team1?.name || "TBD")}</div>
+        ${ok ? `<select class="sc2" name="sc">${ARES.scoreOpts(m)}</select>` : `<span class="m-st">—</span>`}
+        <div class="m-team r">${esc(m.team2?.name || (m.is_bye ? "BYE" : "TBD"))}</div>
+        <span class="m-st">${esc(m._st.toUpperCase())}</span>
+        <input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}"><button class="btn-primary sm" data-save ${ok ? "" : "disabled"}>SAVE</button></div>`; }).join("")}`).join("") || '<div class="empty-state">Belum ada match. Buat bracket dari menu Tournaments.</div>'}</div>`;
     $("msel").onchange = (e) => { selT = e.target.value; renderMatches(); };
-    $("panel").onclick = (e) => { const b = e.target.closest("[data-save]"); if (!b) return; run(() => saveMatch(ms.find(x => x.id === b.closest(".m-row").dataset.id), b.closest(".m-row"))); };
+    $("panel").onclick = (e) => { const b = e.target.closest("[data-save]"); if (!b) return; run(() => saveMatch(ms.find(x => x.id === b.closest(".m-row").dataset.id), b.closest(".m-row")), b); };
   }
 
   async function saveMatch(m, el) {
-    const q = (n) => el.querySelector(`[name=${n}]`).value;
-    const r = await ARES.saveMatchResult(m, +q("s1") || 0, +q("s2") || 0, q("status"), fromLocal(q("when")));
-    toast(r.winner && r.final ? "🏆 Juara ditetapkan" : "Match tersimpan"); renderMatches();
+    const q = (n) => el.querySelector(`[name=${n}]`).value, [s1, s2] = q("sc").split("-").map(Number);
+    const r = await ARES.saveMatchResult(m, s1, s2, fromLocal(q("when")));
+    toast(r.winner && r.final ? "🏆 Juara ditetapkan" : r.done ? "Match selesai — pemenang lanjut ke babak berikutnya" : "Skor tersimpan"); renderMatches();
   }
 
   init();

@@ -29,10 +29,13 @@
     if ($("team-list")) $("team-list").innerHTML = data.length ? Object.entries(groups).map(([n, ts]) => `<div class="group-title">${esc(n)} <small>${ts.length} TEAMS</small></div>${ts.map(card).join("")}`).join("") : '<div class="empty-state">Belum ada tim terdaftar.</div>';
   }
   async function loadMatches() {
-    const { data, error } = await client.from("matches").select("id,status,round_name,scheduled_at,team1:teams!matches_team1_id_fkey(name,tag),team2:teams!matches_team2_id_fkey(name,tag),score1,score2").in("status",["live","completed","scheduled"]).order("scheduled_at",{ascending:true}).limit(50);
+    const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,tournaments(name,status),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
     if (error) return empty($("match-list"), "Match center belum tersedia.");
-    if ($("stat-live")) $("stat-live").textContent = data.filter(m => m.status === "live").length;
-    if ($("match-list")) $("match-list").innerHTML = data.length ? data.map(m => `<article class="match-card"><div class="match-team"><span class="team-emblem">${esc((m.team1?.tag || m.team1?.name || "T1").slice(0,2).toUpperCase())}</span>${esc(m.team1?.name || "TBD")}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m.status.toUpperCase())} · ${esc(m.round_name || "MATCH")}</small></div><div class="match-team"><span>${esc(m.team2?.name || "TBD")}</span><span class="team-emblem">${esc((m.team2?.tag || m.team2?.name || "T2").slice(0,2).toUpperCase())}</span></div></article>`).join("") : '<div class="empty-state">Belum ada pertandingan. Jadwal akan ditampilkan di sini.</div>';
+    const A = window.ARES; A.annotate(data, m => m.tournaments?.status);
+    const rank = { live: 0, scheduled: 1, completed: 2 };
+    const list = data.filter(m => !m.is_bye && m.team1 && m.team2).sort((a, b) => rank[a._st] - rank[b._st] || a._no - b._no);
+    if ($("stat-live")) $("stat-live").textContent = list.filter(m => m._st === "live").length;
+    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · #${m._no} ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan. Jadwal akan ditampilkan di sini.</div>';
   }
   const home = !!$("stat-tournaments");
   async function refresh(){ await Promise.all([(home||$("tournament-list"))&&loadTournaments(),(home||$("team-list"))&&loadTeams(),(home||$("match-list"))&&loadMatches()]); }

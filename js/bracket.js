@@ -22,7 +22,7 @@
     const rounds = [];
     for (let r = 1; r <= total; r++) {
       const cnt = size / Math.pow(2, r), arr = [];
-      for (let p = 1; p <= cnt; p++) arr.push({ round: r, position: p, round_name: roundName(r, total), team1_id: null, team2_id: null, score1: 0, score2: 0, winner_id: null, status: "scheduled", is_bye: false });
+      for (let p = 1; p <= cnt; p++) arr.push({ round: r, position: p, round_name: roundName(r, total), team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: bestOf(r, total), winner_id: null, status: "scheduled", is_bye: false });
       rounds.push(arr);
     }
     rounds[0].forEach((m, i) => {
@@ -38,6 +38,28 @@
     });
     return rounds.flat();
   }
-  const api = { buildBracket, seedOrder, roundName };
+  // Aturan MLBB: Final Bo5, Semi Final Bo3, sisanya Bo1.
+  function bestOf(round, maxR) { return round === maxR ? 5 : round === maxR - 1 ? 3 : 1; }
+  function scoreOptions(bo) {
+    const w = Math.ceil(bo / 2), o = [];
+    for (let a = 0; a <= w; a++) for (let b = 0; b <= w; b++) if (!(a === w && b === w)) o.push([a, b]);
+    return o.sort((x, y) => (x[0] + x[1]) - (y[0] + y[1]) || y[0] - x[0]);
+  }
+  // Nomor match, Bo, dan status turunan (ikut status turnamen). tstat: string atau fn(match).
+  function annotate(ms, tstat) {
+    const by = {};
+    ms.forEach(m => (by[m.tournament_id] ||= []).push(m));
+    Object.values(by).forEach(list => {
+      list.sort((a, b) => a.round - b.round || a.position - b.position);
+      const maxR = Math.max(...list.map(m => m.round)); let n = 0;
+      list.forEach(m => {
+        m._bo = bestOf(m.round, maxR); m._maxR = maxR; m._no = m.is_bye ? null : ++n;
+        const ts = typeof tstat === "function" ? tstat(m) : tstat;
+        m._st = (m.status === "completed" || m.winner_id) ? "completed" : (ts === "live" && m.team1_id && m.team2_id ? "live" : "scheduled");
+      });
+    });
+    return ms;
+  }
+  const api = { buildBracket, seedOrder, roundName, bestOf, scoreOptions, annotate };
   if (typeof module !== "undefined") module.exports = api; else root.ARES_BRACKET = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -72,20 +72,31 @@
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelector(".modal-back")?.remove(); });
 
-  async function saveMatchResult(m, s1, s2, status, whenIso) {
-    let winner = null;
-    if (status === "completed") { if (s1 === s2) throw new Error("Skor seri — tentukan pemenang dulu."); winner = s1 > s2 ? m.team1_id : m.team2_id; }
-    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
+  async function saveMatchResult(m, s1, s2, whenIso) {
+    const B = window.ARES_BRACKET;
+    const [{ data: t }, { data: all }] = await Promise.all([
+      client.from("tournaments").select("status").eq("id", m.tournament_id).single(),
+      client.from("matches").select("id,round,position").eq("tournament_id", m.tournament_id)
+    ]);
+    const maxR = Math.max(...all.map(x => x.round)), bo = B.bestOf(m.round, maxR), wins = Math.ceil(bo / 2);
+    if (s1 > wins || s2 > wins || (s1 === wins && s2 === wins)) throw new Error(`Skor tidak valid untuk Bo${bo}`);
+    const done = s1 === wins || s2 === wins;
+    const winner = done ? (s1 > s2 ? m.team1_id : m.team2_id) : null;
+    const status = done ? "completed" : (t?.status === "live" ? "live" : "scheduled");
+    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status, best_of: bo, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
     if (error) throw error;
-    const { data: all } = await client.from("matches").select("id,round,position").eq("tournament_id", m.tournament_id);
-    const maxR = Math.max(...all.map(x => x.round));
     if (m.round < maxR) {
       const nx = all.find(x => x.round === m.round + 1 && x.position === Math.ceil(m.position / 2));
       const { error: e2 } = await client.from("matches").update({ [m.position % 2 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2;
     } else {
       await client.from("tournaments").update({ champion_id: winner, ...(winner ? { status: "completed" } : {}) }).eq("id", m.tournament_id);
     }
-    return { winner, final: m.round === maxR };
+    return { winner, final: m.round === maxR, done };
   }
-  window.ARES = { saveMatchResult, admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
+  const scoreOpts = (m) => {
+    const o = window.ARES_BRACKET.scoreOptions(m._bo), cur = [m.score1 || 0, m.score2 || 0];
+    if (!o.some(x => x[0] === cur[0] && x[1] === cur[1])) o.push(cur);
+    return o.map(([a, b]) => `<option value="${a}-${b}" ${a === cur[0] && b === cur[1] ? "selected" : ""}>${a} : ${b}</option>`).join("");
+  };
+  window.ARES = { saveMatchResult, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
 })();

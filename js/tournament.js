@@ -22,14 +22,17 @@
       <div class="t-meta"><span>PRIZE POOL <b>Rp ${money(t.prize_pool)}</b></span>${t.start_date ? `<span>START <b>${new Date(t.start_date).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</b></span>` : ""}<span>TEAMS <b>${(teams || []).length}${t.max_teams ? " / " + t.max_teams : ""}</b></span></div>
       ${window.ARES.admin.on ? `<div class="admin-bar"><a href="admin.html#tournaments">Edit / Generate bracket ↗</a><a href="admin.html#teams:${t.id}">Kelola tim ↗</a><a href="admin.html#matches:${t.id}">Semua match ↗</a></div>` : ""}${champ ? `<div class="champion">🏆 CHAMPION · <b data-team="${champ.id}" style="cursor:pointer">${esc(champ.name)}</b></div>` : ""}</div></div>`;
 
+    const A = window.ARES;
+    A.annotate(ms || [], t.status);
+    window.__ms = ms || [];
     const rounds = {};
     (ms || []).forEach(m => (rounds[m.round] ||= []).push(m));
-    const keys = Object.keys(rounds).sort((a, b) => a - b);
-    window.__ms = ms || [];
-    $("t-live").textContent = (ms || []).some(m => m.status === "live") ? "● LIVE NOW" : "";
-    $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)}</div><div class="b-matches">${rounds[r].map(m => {
-      const w = m.winner_id;
-      return `<div class="b-match ${m.status === "live" ? "is-live" : ""}">${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${window.ARES.admin.on && m.team1_id && m.team2_id && !m.is_bye ? `<div class="b-edit" data-mid="${m.id}"><input type="number" min="0" class="sc" name="s1" value="${m.score1 ?? 0}"><span>:</span><input type="number" min="0" class="sc" name="s2" value="${m.score2 ?? 0}"><select name="status">${["scheduled","live","completed"].map(s => `<option ${s === m.status ? "selected" : ""}>${s}</option>`).join("")}</select><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m.status === "live" ? '<i class="live-dot"></i>LIVE' : esc((m.status || "scheduled").toUpperCase())}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div>`;
+    const keys = Object.keys(rounds).sort((a, b) => a - b), last = keys[keys.length - 1];
+    $("t-live").textContent = (ms || []).some(m => m._st === "live") ? "● LIVE NOW" : "";
+    $("bracket").className = "bracket" + (A.admin.on ? " adm" : "");
+    $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "is-last" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => {
+      const w = m.winner_id, canEdit = A.admin.on && m.team1_id && m.team2_id && !m.is_bye;
+      return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "#" + m._no}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${canEdit ? `<div class="b-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
     }).join("")}</div></div>`).join("") : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
 
     $("t-info").innerHTML = `${t.description ? `<div class="eyebrow">ABOUT</div><p class="prose">${esc(t.description)}</p>` : ""}
@@ -41,7 +44,7 @@
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-msave]"); if (!b) return;
     const box = b.closest(".b-edit"), m = (window.__ms || []).find(x => x.id === box.dataset.mid), q = (n) => box.querySelector(`[name=${n}]`).value;
-    try { b.disabled = true; await window.ARES.saveMatchResult(m, +q("s1") || 0, +q("s2") || 0, q("status")); load(); }
+    try { b.disabled = true; const [s1, s2] = q("sc").split("-").map(Number); await window.ARES.saveMatchResult(m, s1, s2); load(); }
     catch (err) { alert(err.message || err); b.disabled = false; }
   });
   client.channel("ares-t-" + id)
