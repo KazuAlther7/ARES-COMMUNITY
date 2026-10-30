@@ -10,7 +10,7 @@ Starter foundation for ARES MLBB Tournament Hub.
 ## Setup
 1. Confirm you are using the correct Supabase project for ARES COMMUNITY.
 2. Run `supabase/schema.sql` in Supabase SQL Editor.
-3. Copy the Supabase anon/publishable key into `assets/js/config.js`.
+3. Copy the Supabase anon/publishable key into `js/config.js`.
 4. Open `index.html` locally or deploy the repository to Cloudflare Pages.
 5. Create an admin user in Supabase Auth. The user must be granted `app_metadata.role = "admin"` through trusted server-side/admin tooling. Do not use user-editable metadata and never expose the service-role key in browser code.
 
@@ -22,3 +22,9 @@ Starter foundation for ARES MLBB Tournament Hub.
 - Initial database schema and RLS policies
 
 Admin dashboard, tournament CRUD, roster editor, bracket generation, score editor, and advanced tournament formats are the next implementation phase.
+
+
+## Folder convention
+- `assets/` — logo, banner, ikon, dan gambar.
+- `css/` — stylesheet.
+- `js/` — JavaScript modules and configuration.
