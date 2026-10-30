@@ -87,3 +87,16 @@ a.match-card{color:inherit}a.match-card:hover{border-color:#57452d}
 .m-no{font:800 11px Inter;color:var(--gold);width:34px}
 .m-row{grid-template-columns:36px 1fr 96px 1fr 84px 190px auto!important}.m-st{font-size:9px;letter-spacing:1px;color:#888;text-align:center}
 @media(max-width:1000px){.m-row{grid-template-columns:36px 1fr 90px 1fr!important}.m-row .m-st,.m-row input[type=datetime-local],.m-row button{grid-column:span 4}}
+
+.role-ico{display:block;object-fit:contain;filter:drop-shadow(0 0 6px #ffffff22)}
+.player-role .role-ico{width:28px;height:28px}
+/* champion */
+.b-round.to-champ .b-item:after{content:"";position:absolute;right:-28px;width:28px;top:50%;border-top:2px solid var(--lc)}
+.b-round.to-champ .b-item:before{display:none}
+.b-champ{border-color:#57452d;text-align:center}
+.b-champ.has{border-color:var(--gold);box-shadow:0 0 28px #d7ad6240;background:linear-gradient(160deg,#241d10,#141619)}
+.champ-body{padding:16px 10px 12px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.trophy{color:#6b5a38}.b-champ.has .trophy{color:var(--gold);filter:drop-shadow(0 0 12px #d7ad6288)}
+.champ-team{display:flex;align-items:center;gap:10px;cursor:pointer}.champ-team strong{font:900 22px 'Barlow Condensed';letter-spacing:1px;color:var(--gold);text-transform:uppercase}
+.champ-tbd{font:800 12px Inter;letter-spacing:2px;color:#555}
+.b-champ .b-foot b{color:#ddd}
