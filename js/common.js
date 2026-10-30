@@ -6,18 +6,9 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (n) => new Intl.NumberFormat("id-ID").format(Number(n || 0));
 
-  // Ikon role (SVG garis, gaya sendiri). Ganti dengan PNG resmi di assets/roles/ bila mau.
-  const ROLES = {
-    "EXP":     { color: "#e8793a", d: "M4 20L18 6l2-2M7 13l4 4M3 21l3-3" },
-    "Gold":    { color: "#f2c94c", d: "M12 4a8 8 0 100 16 8 8 0 000-16zM9 12h6M12 9v6" },
-    "Mid":     { color: "#6aa7ff", d: "M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z" },
-    "Jungler": { color: "#5fd08a", d: "M5 4c6 2 11 7 14 16M9 4c5 2 8 6 10 12M13 4c3 1.5 5 4 6 8" },
-    "Roamer":  { color: "#b784f2", d: "M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" }
-  };
-  const roleIcon = (role, size = 22) => {
-    const r = ROLES[role]; if (!r) return "";
-    return `<svg class="role-ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${r.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${r.d}"/></svg>`;
-  };
+  // Ikon role: gambar di assets/roles/
+  const ROLES = { "EXP": "exp", "Gold": "gold", "Mid": "mid", "Jungler": "jungler", "Roamer": "roamer" };
+  const roleIcon = (role, size = 22) => ROLES[role] ? `<img class="role-ico" src="assets/roles/${ROLES[role]}.png" width="${size}" height="${size}" alt="${esc(role)}">` : "";
   const logo = (t, cls = "") => t?.logo_url
     ? `<span class="team-emblem ${cls}"><img src="${esc(t.logo_url)}" alt=""></span>`
     : `<span class="team-emblem ${cls}">${esc((t?.tag || t?.name || "?").slice(0, 2).toUpperCase())}</span>`;

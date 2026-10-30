@@ -162,7 +162,7 @@
     $("panel").innerHTML = `<div class="a-card"><h3>MATCHES</h3><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
       ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (Final Bo5, Semi Final Bo3, lainnya Bo1).</small>` : ""}
       ${Object.keys(byRound).sort((a, b) => a - b).map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
-        <div class="m-no">${m.is_bye ? "BYE" : "#" + m._no}</div><div class="m-team">${esc(m.team1?.name || "TBD")}</div>
+        <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || "TBD")}</div>
         ${ok ? `<select class="sc2" name="sc">${ARES.scoreOpts(m)}</select>` : `<span class="m-st">—</span>`}
         <div class="m-team r">${esc(m.team2?.name || (m.is_bye ? "BYE" : "TBD"))}</div>
         <span class="m-st">${esc(m._st.toUpperCase())}</span>

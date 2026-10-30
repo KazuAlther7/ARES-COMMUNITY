@@ -35,7 +35,7 @@
     const rank = { live: 0, scheduled: 1, completed: 2 };
     const list = data.filter(m => !m.is_bye && m.team1 && m.team2).sort((a, b) => rank[a._st] - rank[b._st] || a._no - b._no);
     if ($("stat-live")) $("stat-live").textContent = list.filter(m => m._st === "live").length;
-    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · #${m._no} ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan. Jadwal akan ditampilkan di sini.</div>';
+    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · M${m._no} · ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan. Jadwal akan ditampilkan di sini.</div>';
   }
   const home = !!$("stat-tournaments");
   async function refresh(){ await Promise.all([(home||$("tournament-list"))&&loadTournaments(),(home||$("team-list"))&&loadTeams(),(home||$("match-list"))&&loadMatches()]); }
