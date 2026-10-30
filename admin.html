@@ -1,3 +1,18 @@
 <!doctype html>
-<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/png" href="assets/favicon.png"><title>Admin Login — ARES COMMUNITY</title><link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
-<body class="admin-page"><a class="back-home" href="index.html">← BACK TO COMMUNITY</a><main class="login-wrap"><div class="login-card"><img class="login-logo" src="assets/ares-logo.png" alt="ARES"><div class="eyebrow">ARES CONTROL ROOM</div><h1>ADMIN <em>ACCESS.</em></h1><p>Sign in to manage tournaments, teams, brackets, and match results.</p><form id="login-form"><label>Email address<input id="email" type="email" autocomplete="username" required placeholder="admin@example.com"></label><label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="Your password"></label><button class="btn-primary full" type="submit">SIGN IN <span>→</span></button><div id="login-message" class="form-message"></div></form><small class="muted">Admin accounts must be created and granted access through Supabase Auth.</small></div></main><script src="js/config.js"></script><script src="js/admin-login.js"></script></body></html>
+<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/png" href="assets/favicon.png"><title>Admin — ARES COMMUNITY</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css"><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script></head>
+<body class="admin-page">
+<div id="login-view" hidden>
+  <a class="back-home" href="index.html">← BACK TO COMMUNITY</a>
+  <main class="login-wrap"><div class="login-card"><img class="login-logo" src="assets/ares-logo.png" alt="ARES"><div class="eyebrow">ARES CONTROL ROOM</div><h1>ADMIN <em>ACCESS.</em></h1><p>Sign in to manage tournaments, teams, brackets, and match results.</p>
+  <form id="login-form"><label>Email address<input id="email" type="email" autocomplete="username" required placeholder="admin@example.com"></label><label>Password<input id="password" type="password" autocomplete="current-password" required placeholder="Your password"></label><button class="btn-primary full" type="submit">SIGN IN <span>→</span></button><div id="login-message" class="form-message"></div></form></div></main>
+</div>
+<div id="dash-view" hidden>
+  <header class="topbar"><a class="brand" href="index.html"><img class="brand-logo" src="assets/ares-logo.png" alt="ARES"><span>ARES <b>CONTROL ROOM</b><small>ADMIN DASHBOARD</small></span></a>
+    <nav id="tabs"><a href="#" data-tab="tournaments" class="active">Tournaments</a><a href="#" data-tab="teams">Teams</a><a href="#" data-tab="matches">Matches</a></nav>
+    <a class="admin-link" href="#" id="logout">LOGOUT <span>⏻</span></a></header>
+  <main class="admin-main"><div id="toast" class="toast" hidden></div><div id="panel"></div></main>
+</div>
+<script src="js/config.js"></script><script src="js/common.js"></script><script src="js/bracket.js"></script><script src="js/admin.js"></script>
+</body></html>
