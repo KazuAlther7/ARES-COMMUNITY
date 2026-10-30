@@ -19,7 +19,8 @@
     if (!session) return showLogin();
     const { data: ok } = await sb.rpc("is_admin");
     if (!ok) { await sb.auth.signOut(); showLogin("Akun ini belum memiliki akses admin."); return; }
-    $("login-view").hidden = true; $("dash-view").hidden = false; render();
+    $("login-view").hidden = true; $("dash-view").hidden = false;
+    const [h, hid] = location.hash.slice(1).split(":"); if (["tournaments", "teams", "matches"].includes(h)) goTab(h, hid); else render();
   }
   function showLogin(msg) { $("dash-view").hidden = true; $("login-view").hidden = false; $("login-message").textContent = msg || ""; }
 
@@ -32,6 +33,7 @@
   $("logout").onclick = async (e) => { e.preventDefault(); await sb.auth.signOut(); showLogin(); };
   $("tabs").onclick = (e) => { const a = e.target.closest("[data-tab]"); if (!a) return; e.preventDefault(); tab = a.dataset.tab; document.querySelectorAll("#tabs a").forEach(x => x.classList.toggle("active", x === a)); render(); };
 
+  function goTab(name, id) { tab = name; if (id) selT = id; document.querySelectorAll("#tabs a").forEach(x => x.classList.toggle("active", x.dataset.tab === name)); render(); }
   async function loadTournaments() { const { data } = await sb.from("tournaments").select("*").order("created_at", { ascending: false }); tournaments = data || []; }
   async function render() {
     await loadTournaments();
@@ -54,7 +56,7 @@
       <label>Rules<textarea name="rules" rows="4">${esc(t.rules)}</textarea></label>
       <div class="row2"><label>Logo<input name="logo" type="file" accept="image/*"></label><label>Banner<input name="banner" type="file" accept="image/*"></label></div>
       <button class="btn-primary" type="submit">${t.id ? "SAVE CHANGES" : "CREATE TOURNAMENT"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tcancel">CANCEL</button>' : ""}</form>
-    <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="bracket" data-id="${x.id}">Generate bracket</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
+    <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate bracket</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
     $("tf").onsubmit = (e) => { e.preventDefault(); run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), format: f.get("format"), status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
@@ -69,6 +71,7 @@
       if (b.dataset.act === "edit") { renderTournaments(x); scrollTo(0, 0); }
       if (b.dataset.act === "del" && confirm(`Hapus "${x.name}" beserta semua match-nya?`)) run(async () => { const { error } = await sb.from("tournaments").delete().eq("id", x.id); if (error) throw error; toast("Dihapus"); render(); });
       if (b.dataset.act === "bracket") run(() => generateBracket(x));
+      if (b.dataset.act === "teams") goTab("teams", x.id);
     };
   }
 
@@ -88,29 +91,40 @@
     document.querySelectorAll("#tabs a").forEach(x => x.classList.toggle("active", x.dataset.tab === "matches")); render();
   }
 
-  // ---------- Teams ----------
+  // ---------- Teams (sinkron per turnamen) ----------
   async function renderTeams(edit, players) {
-    const t = edit || {}; const { data: teams } = await sb.from("teams").select("*, tournaments(name)").order("created_at", { ascending: false });
+    const t = edit || {};
+    const { data: all } = await sb.from("teams").select("*").order("created_at", { ascending: true });
+    const teams = all || [], cur = tournaments.find(x => x.id === selT);
+    const inT = teams.filter(x => x.tournament_id === selT), orphan = teams.filter(x => !x.tournament_id);
     const P = players || [];
     const rows = Array.from({ length: 7 }, (_, i) => { const sub = i >= 5; const p = P.filter(x => !!x.is_sub === sub)[sub ? i - 5 : i] || {};
-      return `<div class="p-row"><span class="p-n">${sub ? "SUB " + (i - 4) : "P" + (i + 1)}</span><input name="nick${i}" placeholder="Nickname" value="${esc(p.nickname)}"><select name="role${i}">${opts(ROLE_LIST.map(r => [r, r]), p.role, "Role")}</select><input name="mid${i}" placeholder="MLBB ID" value="${esc(p.mlbb_id)}"><input name="srv${i}" placeholder="Server" value="${esc(p.server)}">${sub ? "<span></span>" : `<label class="cap-r"><input type="radio" name="cap" value="${i}" ${p.is_captain ? "checked" : ""}> Cap</label>`}</div>`; }).join("");
-    $("panel").innerHTML = `<div class="admin-grid">
-    <form class="a-card" id="tmf"><h3>${t.id ? "EDIT" : "ADD"} TEAM</h3>
+      return `<div class="p-row"><span class="p-n">${sub ? "SUB " + (i - 4) : "P" + (i + 1)}</span><input name="nick${i}" placeholder="Nickname" value="${esc(p.nickname)}"><select name="role${i}">${opts(ROLE_LIST.map(r => [r, r]), p.role, "Role")}</select>${sub ? "<span></span>" : `<label class="cap-r"><input type="radio" name="cap" value="${i}" ${p.is_captain ? "checked" : ""}> Cap</label>`}</div>`; }).join("");
+    const trow = (x) => `<div class="a-row"><div style="display:flex;gap:12px;align-items:center">${ARES.logo(x)}<div><strong>${esc(x.name)}</strong><small>${esc(x.tag || "")}</small></div></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`;
+    $("panel").innerHTML = `<div class="a-card" style="margin-bottom:18px"><label style="max-width:420px;margin:0">Turnamen aktif<select id="tsel">${tOpts(selT)}</select></label>${cur ? `<small style="color:#888;display:block;margin-top:10px">Tim di sini otomatis tampil di halaman turnamen &amp; menu Teams publik · ${inT.length}${cur.max_teams ? " / " + cur.max_teams : ""} tim</small>` : '<div class="empty-state" style="margin-top:14px">Buat turnamen dulu di menu Tournaments.</div>'}</div>
+    <div class="admin-grid">
+    <form class="a-card" id="tmf"><h3>${t.id ? "EDIT" : "ADD"} TEAM${cur && !t.id ? " → " + esc(cur.name) : ""}</h3>
       <div class="row2"><label>Nama tim<input name="name" required value="${esc(t.name)}"></label><label>Tag<input name="tag" maxlength="6" value="${esc(t.tag)}"></label></div>
-      <div class="row2"><label>Turnamen<select name="tournament_id">${tOpts(t.tournament_id, "— tanpa turnamen —")}</select></label><label>Logo tim<input name="logo" type="file" accept="image/*"></label></div>
-      <div class="eyebrow" style="margin-top:8px">ROSTER · 5 UTAMA + MAKS 2 CADANGAN · ID/SERVER OPSIONAL</div>${rows}
+      <div class="row2"><label>Turnamen<select name="tournament_id">${tOpts(t.id ? t.tournament_id : selT, "— tanpa turnamen —")}</select></label><label>Logo tim<input name="logo" type="file" accept="image/*"></label></div>
+      <div class="eyebrow" style="margin-top:8px">ROSTER · 5 UTAMA + MAKS 2 CADANGAN</div>${rows}
       <button class="btn-primary" type="submit">${t.id ? "SAVE TEAM" : "ADD TEAM"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tmcancel">CANCEL</button>' : ""}</form>
-    <div class="a-card"><h3>ALL TEAMS</h3>${(teams || []).map(x => `<div class="a-row"><div style="display:flex;gap:12px;align-items:center">${ARES.logo(x)}<div><strong>${esc(x.name)}</strong><small>${esc(x.tag || "")} · ${esc(x.tournaments?.name || "tanpa turnamen")}</small></div></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada tim.</div>'}</div></div>`;
+    <div class="a-card"><h3>TEAMS${cur ? " · " + esc(cur.name) : ""}</h3>${inT.map(trow).join("") || '<div class="empty-state">Belum ada tim di turnamen ini.</div>'}
+      ${orphan.length ? `<div class="eyebrow" style="margin:22px 0 4px">TANPA TURNAMEN (edit → pilih turnamen)</div>${orphan.map(trow).join("")}` : ""}</div></div>`;
+    $("tsel").onchange = (e) => { selT = e.target.value; renderTeams(); };
     $("tmf").onsubmit = (e) => { e.preventDefault(); run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), tag: (f.get("tag") || "").trim().toUpperCase() || null, tournament_id: f.get("tournament_id") || null };
+      if (row.tournament_id && row.tournament_id !== t.tournament_id) {
+        const tt = tournaments.find(z => z.id === row.tournament_id), n = teams.filter(z => z.tournament_id === row.tournament_id).length;
+        if (tt?.max_teams && n >= tt.max_teams) throw new Error(`Turnamen penuh (${tt.max_teams} tim).`);
+      }
       const lf = f.get("logo"); if (lf?.size) row.logo_url = await uploadImage(lf, "teams");
       let id = t.id;
       if (id) { const { error } = await sb.from("teams").update(row).eq("id", id); if (error) throw error; }
       else { const { data, error } = await sb.from("teams").insert(row).select("id").single(); if (error) throw error; id = data.id; }
       const cap = f.get("cap"), pl = [];
       for (let i = 0; i < 7; i++) { const n = (f.get("nick" + i) || "").trim(); if (!n) continue;
-        pl.push({ team_id: id, nickname: n, role: f.get("role" + i) || null, mlbb_id: (f.get("mid" + i) || "").trim() || null, server: (f.get("srv" + i) || "").trim() || null, is_sub: i >= 5, is_captain: i < 5 && cap === String(i), sort_order: i }); }
+        pl.push({ team_id: id, nickname: n, role: f.get("role" + i) || null, is_sub: i >= 5, is_captain: i < 5 && cap === String(i), sort_order: i }); }
       await sb.from("players").delete().eq("team_id", id);
       if (pl.length) { const { error } = await sb.from("players").insert(pl); if (error) throw error; }
       toast("Tim tersimpan"); renderTeams();
@@ -138,20 +152,8 @@
 
   async function saveMatch(m, el) {
     const q = (n) => el.querySelector(`[name=${n}]`).value;
-    const s1 = +q("s1") || 0, s2 = +q("s2") || 0, status = q("status");
-    let winner = null;
-    if (status === "completed") { if (s1 === s2) throw new Error("Skor seri — tentukan pemenang dulu."); winner = s1 > s2 ? m.team1_id : m.team2_id; }
-    const { error } = await sb.from("matches").update({ score1: s1, score2: s2, status, winner_id: winner, scheduled_at: fromLocal(q("when")) }).eq("id", m.id);
-    if (error) throw error;
-    const { data: all } = await sb.from("matches").select("id,round,position").eq("tournament_id", m.tournament_id);
-    const maxR = Math.max(...all.map(x => x.round));
-    if (m.round < maxR) {
-      const nx = all.find(x => x.round === m.round + 1 && x.position === Math.ceil(m.position / 2));
-      const { error: e2 } = await sb.from("matches").update({ [m.position % 2 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2;
-    } else {
-      await sb.from("tournaments").update({ champion_id: winner, ...(winner ? { status: "completed" } : {}) }).eq("id", m.tournament_id);
-    }
-    toast(winner && m.round === maxR ? "🏆 Juara ditetapkan" : "Match tersimpan"); renderMatches();
+    const r = await ARES.saveMatchResult(m, +q("s1") || 0, +q("s2") || 0, q("status"), fromLocal(q("when")));
+    toast(r.winner && r.final ? "🏆 Juara ditetapkan" : "Match tersimpan"); renderMatches();
   }
 
   init();

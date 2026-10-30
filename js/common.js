@@ -47,7 +47,7 @@
     ]);
     const body = back.querySelector(".modal-body");
     if (!team) { body.innerHTML = '<div class="empty-state">Tim tidak ditemukan.</div>'; return; }
-    const row = (p) => `<li class="player"><span class="player-role">${roleIcon(p.role, 26)}<small>${esc(p.role || "—")}</small></span><div><strong>${esc(p.nickname)}</strong>${p.is_captain ? '<em class="cap">CAPTAIN</em>' : ""}${p.mlbb_id ? `<small>ID ${esc(p.mlbb_id)}${p.server ? ` (${esc(p.server)})` : ""}</small>` : ""}</div></li>`;
+    const row = (p) => `<li class="player"><span class="player-role">${roleIcon(p.role, 26)}<small>${esc(p.role || "—")}</small></span><div><strong>${esc(p.nickname)}</strong>${p.is_captain ? '<em class="cap">CAPTAIN</em>' : ""}</div></li>`;
     const main = (players || []).filter(p => !p.is_sub), subs = (players || []).filter(p => p.is_sub);
     body.innerHTML = `<div class="roster-head">${logo(team, "xl")}<div><div class="eyebrow">${esc(team.tag || "TEAM")}</div><h3>${esc(team.name)}</h3>${team.tournaments?.name ? `<small>${esc(team.tournaments.name)}</small>` : ""}</div></div>
       <div class="eyebrow">STARTING ROSTER</div><ul class="roster">${main.map(row).join("") || '<li class="muted-li">Roster belum diisi.</li>'}</ul>
@@ -59,5 +59,20 @@
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelector(".modal-back")?.remove(); });
 
-  window.ARES = { client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
+  async function saveMatchResult(m, s1, s2, status, whenIso) {
+    let winner = null;
+    if (status === "completed") { if (s1 === s2) throw new Error("Skor seri — tentukan pemenang dulu."); winner = s1 > s2 ? m.team1_id : m.team2_id; }
+    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
+    if (error) throw error;
+    const { data: all } = await client.from("matches").select("id,round,position").eq("tournament_id", m.tournament_id);
+    const maxR = Math.max(...all.map(x => x.round));
+    if (m.round < maxR) {
+      const nx = all.find(x => x.round === m.round + 1 && x.position === Math.ceil(m.position / 2));
+      const { error: e2 } = await client.from("matches").update({ [m.position % 2 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2;
+    } else {
+      await client.from("tournaments").update({ champion_id: winner, ...(winner ? { status: "completed" } : {}) }).eq("id", m.tournament_id);
+    }
+    return { winner, final: m.round === maxR };
+  }
+  window.ARES = { saveMatchResult, admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
 })();

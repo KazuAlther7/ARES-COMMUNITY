@@ -23,7 +23,10 @@
     const { data, error } = await client.from("teams").select("id,name,tag,logo_url,tournaments(name)").order("created_at",{ascending:false}).limit(50);
     if (error) return empty($("team-list"), "Data tim belum tersedia.");
     if ($("stat-teams")) $("stat-teams").textContent = data.length;
-    if ($("team-list")) $("team-list").innerHTML = data.length ? data.map(t => `<article class="team-card" data-team="${t.id}" style="cursor:pointer"><div class="team-emblem">${t.logo_url ? `<img src="${esc(t.logo_url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc((t.tag || t.name || "A").slice(0,2).toUpperCase())}</div><div><h3>${esc(t.name)}</h3><p>${esc(t.tag || "ARES CONTENDER")}</p></div></article>`).join("") : '<div class="empty-state">Belum ada tim terdaftar.</div>';
+    const card = (t) => `<article class="team-card" data-team="${t.id}" style="cursor:pointer"><div class="team-emblem">${t.logo_url ? `<img src="${esc(t.logo_url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc((t.tag || t.name || "A").slice(0,2).toUpperCase())}</div><div><h3>${esc(t.name)}</h3><p>${esc(t.tag || "ARES CONTENDER")}</p></div></article>`;
+    const groups = {};
+    data.forEach(t => (groups[t.tournaments?.name || "Belum masuk turnamen"] ||= []).push(t));
+    if ($("team-list")) $("team-list").innerHTML = data.length ? Object.entries(groups).map(([n, ts]) => `<div class="group-title">${esc(n)} <small>${ts.length} TEAMS</small></div>${ts.map(card).join("")}`).join("") : '<div class="empty-state">Belum ada tim terdaftar.</div>';
   }
   async function loadMatches() {
     const { data, error } = await client.from("matches").select("id,status,round_name,scheduled_at,team1:teams!matches_team1_id_fkey(name,tag),team2:teams!matches_team2_id_fkey(name,tag),score1,score2").in("status",["live","completed","scheduled"]).order("scheduled_at",{ascending:true}).limit(50);
