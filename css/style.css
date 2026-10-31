@@ -149,6 +149,15 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 .sp-row button{background:var(--red);color:#fff;border:0;padding:5px 7px;font:800 8px Inter;cursor:pointer;white-space:nowrap}
 .sp-row.is-live{box-shadow:inset 2px 0 0 var(--red)}
 @media(max-width:600px){.sp-grid{grid-template-columns:1fr 1fr}}
+.sp-gen{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;padding-bottom:16px;border-bottom:1px dashed var(--red)}
+.sp-gen label{font-size:9px;letter-spacing:1px;color:#b5b8bb}
+.sp-gen select{display:block;margin-top:5px;padding:9px;background:#0c0e10;border:1px solid #34383c;color:#fff;font-size:12px}
+.sp-gen button{background:var(--red);color:#fff;border:0;padding:11px 16px;font:800 10px Inter;cursor:pointer;letter-spacing:.9px}
+
+/* lolos / tersingkir (Group Stage + Playoffs) */
+.standings tr.q-in td:first-child{box-shadow:inset 3px 0 0 #2ecc71}
+.standings tr.q-out td:first-child{box-shadow:inset 3px 0 0 #e12b36}
+.standings tr.q-out{opacity:.55}
 
 /* filter turnamen di Live Matches, ala pilihan menu Teams */
 .t-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
