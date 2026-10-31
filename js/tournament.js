@@ -14,11 +14,7 @@
     const runner = done ? (fin.winner_id === fin.team1_id ? fin.team2 : fin.team1) : null;
     return `<div class="b-round is-last champ-col"><div class="b-title">CHAMPION</div><div class="b-matches"><div class="b-item"><div class="b-match b-champ ${champ ? "has" : ""}"><div class="b-head"><span>CHAMPION</span><span>1ST</span></div><div class="champ-body">${TROPHY}${champ ? `<div class="champ-team" data-team="${champ.id}">${logo(champ, "lg")}<strong>${esc(champ.name)}</strong></div>` : '<div class="champ-tbd">TBD</div>'}</div><div class="b-foot">${runner ? `RUNNER-UP · <b data-team="${runner.id}" style="cursor:pointer">${esc(runner.name)}</b>` : "MENUNGGU GRAND FINAL"}</div></div></div></div></div>`;
   };
-  // ----- fase liga / grup: klasemen + jadwal (read-only; edit skor ada di panel admin terpisah) -----
-  const fxRow = (m) => {
-    const nm = (x) => x ? esc(x.name) : "TBD";
-    return `<div class="fx ${m._st === "live" ? "is-live" : ""}"><span class="fx-no">M${m._no}</span><div class="fx-t r" ${m.team1_id ? `data-team="${m.team1_id}"` : ""}><span>${nm(m.team1)}</span>${m.team1 ? logo(m.team1) : ""}</div><div class="fx-s">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()} · BO${m._bo}</small></div><div class="fx-t" ${m.team2_id ? `data-team="${m.team2_id}"` : ""}>${m.team2 ? logo(m.team2) : ""}<span>${nm(m.team2)}</span></div></div>`;
-  };
+  // ----- fase liga / grup: klasemen doang (jadwal/matchday ada di menu Live Matches) -----
   function renderLeague(t, lg, teams) {
     const el = $("t-league");
     if (!lg.length) { el.hidden = true; el.innerHTML = ""; return; }
@@ -50,10 +46,8 @@
         const gm = groups[g].sort((a, b) => a.round - b.round || a.position - b.position);
         const ids = [...new Set(gm.flatMap(m => [m.team1_id, m.team2_id]).filter(Boolean))];
         const rows = window.ARES_BRACKET.standings(ids.map(i => tmap[i]).filter(Boolean), gm, mode);
-        const rounds = {}; gm.forEach(m => (rounds[m.round] ||= []).push(m));
         return `<div class="lg-block">${g ? `<h3 class="lg-title">${esc(g)}</h3>` : ""}<div class="tbl-wrap"><table class="standings">${head}${rows.map((r, i) => row(r, i, t.champion_id === r.team.id)).join("")}</table></div>
-        <p class="hint">${hint}</p>
-        ${Object.keys(rounds).sort((a, b) => a - b).map(r => `<div class="fx-round"><div class="eyebrow">MATCHDAY ${r}</div>${rounds[r].map(fxRow).join("")}</div>`).join("")}</div>`;
+        <p class="hint">${hint}</p></div>`;
       }).join("");
     el.hidden = false;
   }
