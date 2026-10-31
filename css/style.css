@@ -114,3 +114,21 @@ button.btn-ghost{background:transparent;color:#e9e9e9;border:1px solid #4a4f55;p
 button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 
 .slogan{margin:4px 0 0;color:#a1a5aa;font-style:italic;font-size:12px;line-height:1.5;text-transform:none;letter-spacing:0}
+
+/* liga / klasemen */
+.lg-block{margin-bottom:40px}.lg-title{font:800 26px 'Barlow Condensed';letter-spacing:1px;text-transform:uppercase;color:var(--gold);margin:0 0 10px}
+.tbl-wrap{overflow-x:auto}.standings{width:100%;border-collapse:collapse;min-width:560px;background:#111315;border:1px solid var(--line)}
+.standings th{font-size:9px;letter-spacing:1.4px;color:var(--gold);padding:10px 8px;text-align:center;border-bottom:1px solid var(--line);background:#101214}
+.standings td{padding:10px 8px;text-align:center;font-size:13px;border-bottom:1px solid var(--line);color:#cfd2d5}
+.standings .tl{text-align:left}.standings .tm{display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:700}
+.standings .tm .team-emblem{width:28px;height:28px;font-size:12px;flex:none}
+.standings tr.top td{background:#17140c}.standings tr.top td:first-child{box-shadow:inset 3px 0 0 var(--gold)}
+.standings tr.champ td{color:var(--gold)}.standings td b{font:900 18px 'Barlow Condensed';color:#fff}
+.fx-round{margin-top:18px}.fx{position:relative;display:grid;grid-template-columns:44px 1fr 120px 1fr;align-items:center;gap:10px;padding:10px 14px;margin-top:8px;background:#141619;border:1px solid var(--line)}
+.fx.is-live{border-color:var(--red);box-shadow:0 0 18px #e12b3640}
+.fx-no{font:800 10px Inter;color:var(--gold);letter-spacing:1px}
+.fx-t{display:flex;align-items:center;gap:10px;font-weight:700;font-size:13px;cursor:pointer}.fx-t.r{justify-content:flex-end;text-align:right}
+.fx-t .team-emblem{width:28px;height:28px;font-size:12px;flex:none}
+.fx-s{text-align:center;font:900 22px 'Barlow Condensed';letter-spacing:2px}.fx-s small{display:block;font:700 8px Inter;letter-spacing:1.2px;color:#777}
+.fx-edit{grid-column:1/-1;margin:2px -14px -10px;border-top:1px dashed var(--red)}
+@media(max-width:600px){.fx{grid-template-columns:34px 1fr 84px 1fr;padding:10px 8px}.fx-t span{font-size:11px}}
