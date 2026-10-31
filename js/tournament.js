@@ -14,7 +14,7 @@
     const runner = done ? (fin.winner_id === fin.team1_id ? fin.team2 : fin.team1) : null;
     return `<div class="b-round is-last champ-col"><div class="b-title">CHAMPION</div><div class="b-matches"><div class="b-item"><div class="b-match b-champ ${champ ? "has" : ""}"><div class="b-head"><span>CHAMPION</span><span>1ST</span></div><div class="champ-body">${TROPHY}${champ ? `<div class="champ-team" data-team="${champ.id}">${logo(champ, "lg")}<strong>${esc(champ.name)}</strong></div>` : '<div class="champ-tbd">TBD</div>'}</div><div class="b-foot">${runner ? `RUNNER-UP · <b data-team="${runner.id}" style="cursor:pointer">${esc(runner.name)}</b>` : "MENUNGGU GRAND FINAL"}</div></div></div></div></div>`;
   };
-  // ----- fase liga / grup: klasemen + jadwal (read-only, edit skor dipisah ke panel admin) -----
+  // ----- fase liga / grup: klasemen + jadwal (read-only; edit skor ada di panel admin terpisah) -----
   const fxRow = (m) => {
     const nm = (x) => x ? esc(x.name) : "TBD";
     return `<div class="fx ${m._st === "live" ? "is-live" : ""}"><span class="fx-no">M${m._no}</span><div class="fx-t r" ${m.team1_id ? `data-team="${m.team1_id}"` : ""}><span>${nm(m.team1)}</span>${m.team1 ? logo(m.team1) : ""}</div><div class="fx-s">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()} · BO${m._bo}</small></div><div class="fx-t" ${m.team2_id ? `data-team="${m.team2_id}"` : ""}>${m.team2 ? logo(m.team2) : ""}<span>${nm(m.team2)}</span></div></div>`;
@@ -27,14 +27,19 @@
     const groups = {}; lg.forEach(m => (groups[m.group_name || ""] ||= []).push(m));
     const isRR = t.format === "round_robin";
     const mode = t.standings_mode === "mlbb" ? "mlbb" : "normal";
+    const showQualify = t.format === "group_playoffs" && t.qualify_count > 0;
+    const qc = t.qualify_count || 0;
     const head = mode === "mlbb"
       ? `<tr><th>#</th><th class="tl">TIM</th><th>MP</th><th>W-L</th><th>NET</th><th>GAME</th></tr>`
       : `<tr><th>#</th><th class="tl">TIM</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>PTS</th></tr>`;
-    const hint = mode === "mlbb"
+    let hint = mode === "mlbb"
       ? "MLBB Group Standings · MP = jumlah match menang. Urutan: Match Point → Net Game Win → Game Menang."
       : "Menang 3 poin · seri 1 · kalah 0. Poin sama → selisih gol (GD), lalu gol masuk (GF). Gol = kemenangan game.";
+    if (showQualify) hint += ` · Hijau = ${qc} besar (lolos playoff), merah = tersingkir.`;
     const row = (r, i, champ) => {
-      const cls = `${i === 0 && r.P ? "top" : ""} ${champ ? "champ" : ""}`;
+      const qualIn = showQualify ? i < qc : null;
+      const topCls = qualIn === null && i === 0 && r.P ? "top" : "";
+      const cls = `${topCls} ${champ ? "champ" : ""} ${qualIn === true ? "q-in" : qualIn === false ? "q-out" : ""}`;
       const name = `<td class="tl tm" data-team="${r.team.id}">${logo(r.team)}<span>${esc(r.team.name)}</span>${champ ? " 🏆" : ""}</td>`;
       return mode === "mlbb"
         ? `<tr class="${cls}"><td>${i + 1}</td>${name}<td><b>${r.W}</b></td><td>${r.W}-${r.L}</td><td>${r.GD > 0 ? "+" : ""}${r.GD}</td><td>${r.GF}-${r.GA}</td></tr>`
@@ -52,17 +57,28 @@
       }).join("");
     el.hidden = false;
   }
-  // ----- panel admin: set skor, dipisah dari tampilan publik, dipadatkan per matchday/round -----
+  // ----- panel admin: set skor, padat per matchday/round — hanya utk format ber-klasemen grup -----
   const spRow = (m) => `<div class="sp-row ${m._st === "live" ? "is-live" : ""}" data-mid="${m.id}"><span class="sp-no">M${m._no}</span><span class="sp-t" data-team="${m.team1_id}">${esc(m.team1?.name || "TBD")}</span><select name="sc">${window.ARES.scoreOpts(m)}</select><span class="sp-t r" data-team="${m.team2_id}">${esc(m.team2?.name || "TBD")}</span><button type="button" data-msave>SAVE</button></div>`;
   const spBox = (label, ms) => `<div class="sp-box"><div class="sp-box-h">${esc(label)}</div>${ms.map(spRow).join("")}</div>`;
-  function renderScorePanel(allMs) {
+  function renderScorePanel(t, allMs) {
     const el = $("t-scorepanel");
     if (!el) return;
-    if (!window.ARES.admin.on) { el.hidden = true; el.innerHTML = ""; return; }
+    const useScorePanel = t.format === "round_robin" || t.format === "group_playoffs";
+    if (!useScorePanel || !window.ARES.admin.on) { el.hidden = true; el.innerHTML = ""; return; }
     const editable = (allMs || []).filter(m => m.team1_id && m.team2_id && !m.is_bye);
-    if (!editable.length) { el.hidden = true; el.innerHTML = ""; return; }
+    const lg = editable.filter(m => !m._ko), ko = editable.filter(m => m._ko);
+    if (!editable.length && t.format !== "group_playoffs") { el.hidden = true; el.innerHTML = ""; return; }
+
+    let genBar = "";
+    if (t.format === "group_playoffs" && lg.length) {
+      const sizes = {}; lg.forEach(m => { (sizes[m.group_name || ""] ||= new Set()).add(m.team1_id); sizes[m.group_name || ""].add(m.team2_id); });
+      const minSize = Math.min(...Object.values(sizes).map(s => s.size)) || 2;
+      const cur = Math.min(t.qualify_count || 2, minSize);
+      const qOpts = Array.from({ length: minSize }, (_, i) => i + 1).map(n => `<option value="${n}" ${n === cur ? "selected" : ""}>${n}</option>`).join("");
+      genBar = `<div class="sp-gen"><label>Tim lolos / grup<select id="qcount">${qOpts}</select></label><button type="button" id="genplayoffs">GENERATE PLAYOFFS →</button></div>`;
+    }
+
     let boxes = "";
-    const lg = editable.filter(m => !m._ko);
     if (lg.length) {
       const groups = {}; lg.forEach(m => (groups[(m.group_name || "") + "|" + String(m.round).padStart(3, "0")] ||= []).push(m));
       boxes += Object.keys(groups).sort().map(k => {
@@ -71,7 +87,6 @@
         return spBox(label, ms);
       }).join("");
     }
-    const ko = editable.filter(m => m._ko);
     if (ko.length) {
       const groups = {}; ko.forEach(m => (groups[m.round] ||= []).push(m));
       boxes += Object.keys(groups).sort((a, b) => a - b).map(r => {
@@ -79,7 +94,7 @@
         return spBox(ms[0].round_name || ("Round " + r), ms);
       }).join("");
     }
-    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">ADMIN ONLY</div><h2>SET SCORES<span>.</span></h2></div></div><div class="sp-grid">${boxes}</div>`;
+    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">ADMIN ONLY</div><h2>SET SCORES<span>.</span></h2></div></div>${genBar}${boxes ? `<div class="sp-grid">${boxes}</div>` : '<p class="hint">Belum ada match playoff — generate dulu dari klasemen grup.</p>'}`;
     el.hidden = false;
   }
   async function load() {
@@ -101,19 +116,21 @@
     const A = window.ARES;
     A.annotate(ms || [], t.status);
     window.__ms = ms || [];
+    window.__t = t;
     const ko = (ms || []).filter(m => m._ko), lg = (ms || []).filter(m => !m._ko);
+    const useScorePanel = t.format === "round_robin" || t.format === "group_playoffs";
     renderLeague(t, lg, teams || []);
-    renderScorePanel(ms || []);
+    renderScorePanel(t, ms || []);
     $("t-bracket-sec").hidden = !ko.length && t.format !== "single_elimination";
     $("t-bracket-h").innerHTML = (lg.length ? "PLAYOFFS" : "BRACKET") + "<span>.</span>";
     const rounds = {};
     ko.forEach(m => (rounds[m.round] ||= []).push(m));
     const keys = Object.keys(rounds).sort((a, b) => a - b), last = keys[keys.length - 1];
     $("t-live").textContent = (ms || []).some(m => m._st === "live") ? "● LIVE NOW" : "";
-    $("bracket").className = "bracket";
+    $("bracket").className = "bracket" + (!useScorePanel && A.admin.on ? " adm" : "");
     $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "to-champ" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => {
-      const w = m.winner_id;
-      return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "MATCH " + m._no}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
+      const w = m.winner_id, canEdit = !useScorePanel && A.admin.on && m.team1_id && m.team2_id && !m.is_bye;
+      return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "MATCH " + m._no}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${canEdit ? `<div class="b-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
     }).join("")}</div></div>`).join("") + champCol(rounds[last][0]) : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
 
     $("t-info").innerHTML = `${t.description ? `<div class="eyebrow">ABOUT</div><p class="prose">${esc(t.description)}</p>` : ""}
@@ -131,6 +148,13 @@
     const title = document.title, txt = "Bracket & skor live — ARES COMMUNITY";
     if (b.dataset.share === "native" && navigator.share) { try { await navigator.share({ title, text: txt, url: shareUrl }); } catch {} return; }
     try { await navigator.clipboard.writeText(shareUrl); const o = b.textContent; b.textContent = "COPIED ✓"; setTimeout(() => b.textContent = o, 1800); } catch { prompt("Salin link:", shareUrl); }
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("#genplayoffs"); if (!b) return;
+    const k = +document.getElementById("qcount").value;
+    try { b.disabled = true; const r = await window.ARES.generatePlayoffs((window.__t || {}).id, k); if (r) load(); }
+    catch (err) { alert(err.message || err); }
+    finally { if (b.isConnected) b.disabled = false; }
   });
   window.addEventListener("ares-admin", load);
   document.addEventListener("click", async (e) => {

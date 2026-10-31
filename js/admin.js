@@ -60,7 +60,8 @@
     <form class="a-card" id="tf"><h3>${t.id ? "EDIT" : "CREATE"} TOURNAMENT</h3>
       <label>Nama<input name="name" required value="${esc(t.name)}"></label>
       <label>Format<select name="format">${opts(Object.entries(FORMATS), t.format || "single_elimination")}</select></label>
-      <label>Mode klasemen (liga/grup)<select name="standings_mode">${opts([["normal", "Normal Group Standings"], ["mlbb", "MLBB Group Standings"]], t.standings_mode || "normal")}</select></label>
+      <div class="row2"><label>Mode klasemen (liga/grup)<select name="standings_mode">${opts([["normal", "Normal Group Standings"], ["mlbb", "MLBB Group Standings"]], t.standings_mode || "normal")}</select></label>
+      <label>Tim lolos / grup (Group+Playoffs)<input name="qualify_count" type="number" min="1" value="${t.qualify_count ?? 2}"></label></div>
       <div class="row2"><label>Status<select name="status">${opts([["upcoming", "Upcoming"], ["live", "Live"], ["completed", "Completed"]], t.status || "upcoming")}</select></label>
       <label>Max tim<input name="max_teams" type="number" min="2" value="${t.max_teams ?? 16}"></label></div>
       <div class="row2"><label>Prize pool (Rp)<input name="prize_pool" type="number" min="0" value="${t.prize_pool ?? 0}"></label>
@@ -72,7 +73,7 @@
     <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate jadwal/bracket</button>${x.format === "group_playoffs" ? `<button data-act="playoffs" data-id="${x.id}">Generate playoffs</button>` : ""}<button data-act="share" data-id="${x.id}">Share</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
     $("tf").onsubmit = (e) => { e.preventDefault(); const btn = e.submitter; run(async () => {
       const f = new FormData(e.target);
-      const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: f.get("standings_mode") || "normal", status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
+      const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: f.get("standings_mode") || "normal", qualify_count: +f.get("qualify_count") || null, status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
       let id = t.id;
       if (id) { const { error } = await sb.from("tournaments").update(row).eq("id", id); if (error) throw error; }
       else { const { data, error } = await sb.from("tournaments").insert(row).select("id").single(); if (error) throw error; id = data.id; }
@@ -123,26 +124,13 @@
   }
 
   async function generatePlayoffs(t) {
-    const B = ARES_BRACKET;
-    const { data: ms } = await sb.from("matches").select("*").eq("tournament_id", t.id);
-    const gm = (ms || []).filter(m => m.stage === "group");
-    if (!gm.length) throw new Error("Generate fase grup dulu.");
-    const left = gm.filter(m => m.status !== "completed").length;
-    if (left && !confirm(`${left} match grup belum selesai. Buat playoff dari klasemen sementara?`)) return;
-    const names = [...new Set(gm.map(m => m.group_name))].sort();
-    const ranked = names.map(g => { const list = gm.filter(m => m.group_name === g); const ids = [...new Set(list.flatMap(m => [m.team1_id, m.team2_id]))].map(id => ({ id })); return B.standings(ids, list).map(r => r.team.id); });
-    const smallest = Math.min(...ranked.map(r => r.length));
-    const k = +prompt(`Berapa tim lolos per grup (1–${smallest})?`, String(Math.min(2, smallest)));
-    if (!(k >= 1 && k <= smallest)) throw new Error("Jumlah lolos tidak valid.");
-    const seeds = []; for (let r = 0; r < k; r++) names.forEach((_, i) => seeds.push(ranked[i][r]));
-    if (seeds.length < 2) throw new Error("Minimal 2 tim lolos.");
-    const old = (ms || []).filter(m => m.stage === "playoff");
-    if (old.length && !confirm("Playoff sudah ada. Generate ulang akan menghapusnya. Lanjut?")) return;
-    if (old.length) await sb.from("matches").delete().in("id", old.map(x => x.id));
-    const rows = B.buildPlayoffs(seeds).map(m => ({ ...m, tournament_id: t.id }));
-    const { error } = await sb.from("matches").insert(rows); if (error) throw error;
-    await sb.from("tournaments").update({ champion_id: null }).eq("id", t.id);
-    toast(`Playoff dibuat: ${seeds.length} tim, ${rows.length} match`); selT = t.id; tab = "matches";
+    const { data: gm } = await sb.from("matches").select("id").eq("tournament_id", t.id).eq("stage", "group").limit(1);
+    if (!gm?.length) throw new Error("Generate fase grup dulu.");
+    let k = t.qualify_count;
+    if (!k) { k = +prompt("Berapa tim lolos per grup?", "2"); if (!(k >= 1)) throw new Error("Jumlah lolos tidak valid."); }
+    const r = await ARES.generatePlayoffs(t.id, k);
+    if (!r) return; // dibatalkan oleh konfirmasi
+    toast(`Playoff dibuat: ${r.seeds} tim, ${r.matches} match`); selT = t.id; tab = "matches";
     document.querySelectorAll("#tabs a").forEach(x => x.classList.toggle("active", x.dataset.tab === "matches")); render();
   }
 

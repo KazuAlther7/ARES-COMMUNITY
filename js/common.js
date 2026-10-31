@@ -126,10 +126,37 @@
     await client.from("tournaments").update({ champion_id: null, ...(t0?.status === "completed" ? { status: "upcoming" } : {}) }).eq("id", tid);
     return st.length;
   }
+  // Generate bracket playoff dari klasemen grup saat ini. k = jumlah tim lolos per grup.
+  // Dipakai dari admin.html (tab Tournaments) maupun langsung dari tournament.html (panel Set Scores).
+  async function generatePlayoffs(tid, k) {
+    const B = window.ARES_BRACKET;
+    const [{ data: t }, { data: ms0 }] = await Promise.all([
+      client.from("tournaments").select("standings_mode").eq("id", tid).single(),
+      client.from("matches").select("*").eq("tournament_id", tid)
+    ]);
+    const mode = t?.standings_mode === "mlbb" ? "mlbb" : "normal";
+    const gm = (ms0 || []).filter(m => m.stage === "group");
+    if (!gm.length) throw new Error("Generate fase grup dulu.");
+    const left = gm.filter(m => m.status !== "completed").length;
+    if (left && !confirm(`${left} match grup belum selesai. Buat playoff dari klasemen sementara?`)) return null;
+    const names = [...new Set(gm.map(m => m.group_name))].sort();
+    const ranked = names.map(g => { const list = gm.filter(m => m.group_name === g); const ids = [...new Set(list.flatMap(m => [m.team1_id, m.team2_id]))].map(id => ({ id })); return B.standings(ids, list, mode).map(r => r.team.id); });
+    const smallest = Math.min(...ranked.map(r => r.length));
+    if (!(k >= 1 && k <= smallest)) throw new Error(`Jumlah tim lolos harus 1–${smallest}.`);
+    const seeds = []; for (let r = 0; r < k; r++) names.forEach((_, i) => seeds.push(ranked[i][r]));
+    if (seeds.length < 2) throw new Error("Minimal 2 tim lolos.");
+    const old = (ms0 || []).filter(m => m.stage === "playoff");
+    if (old.length && !confirm("Playoff sudah ada. Generate ulang akan menghapusnya. Lanjut?")) return null;
+    if (old.length) await client.from("matches").delete().in("id", old.map(x => x.id));
+    const rows = B.buildPlayoffs(seeds).map(m => ({ ...m, tournament_id: tid }));
+    const { error } = await client.from("matches").insert(rows); if (error) throw error;
+    await client.from("tournaments").update({ champion_id: null, qualify_count: k }).eq("id", tid);
+    return { seeds: seeds.length, matches: rows.length };
+  }
   const scoreOpts = (m) => {
     const o = window.ARES_BRACKET.scoreOptions(m._bo), cur = [m.score1 || 0, m.score2 || 0];
     if (!o.some(x => x[0] === cur[0] && x[1] === cur[1])) o.push(cur);
     return o.map(([a, b]) => `<option value="${a}-${b}" ${a === cur[0] && b === cur[1] ? "selected" : ""}>${a} : ${b}</option>`).join("");
   };
-  window.ARES = { saveMatchResult, resetScores, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
+  window.ARES = { saveMatchResult, resetScores, generatePlayoffs, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
 })();
