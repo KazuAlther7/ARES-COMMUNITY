@@ -29,7 +29,7 @@
     if ($("team-list")) $("team-list").innerHTML = data.length ? Object.entries(groups).map(([n, ts]) => `<div class="group-title">${esc(n)} <small>${ts.length} TEAMS</small></div>${ts.map(card).join("")}`).join("") : '<div class="empty-state">Belum ada tim terdaftar.</div>';
   }
   async function loadMatches() {
-    const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,tournaments(name,status),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
+    const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,stage,group_name,best_of,tournaments(name,status),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
     if (error) return empty($("match-list"), "Match center belum tersedia.");
     const A = window.ARES; A.annotate(data, m => m.tournaments?.status);
     const rank = { live: 0, scheduled: 1, completed: 2 };

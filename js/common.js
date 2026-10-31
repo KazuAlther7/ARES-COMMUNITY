@@ -66,18 +66,35 @@
   async function saveMatchResult(m, s1, s2, whenIso) {
     const B = window.ARES_BRACKET;
     const [{ data: t }, { data: all }] = await Promise.all([
-      client.from("tournaments").select("status").eq("id", m.tournament_id).single(),
-      client.from("matches").select("id,round,position").eq("tournament_id", m.tournament_id)
+      client.from("tournaments").select("status,format").eq("id", m.tournament_id).single(),
+      client.from("matches").select("id,round,position,stage,team1_id,team2_id,score1,score2,status").eq("tournament_id", m.tournament_id)
     ]);
-    const maxR = Math.max(...all.map(x => x.round)), bo = B.bestOf(m.round, maxR), wins = Math.ceil(bo / 2);
+    const live = t?.status === "live" ? "live" : "scheduled";
+    if (!B.isKO(m)) { // fase liga / grup
+      const bo = m.best_of || 1;
+      if (!B.scoreOptions(bo).some(o => o[0] === s1 && o[1] === s2)) throw new Error(`Skor tidak valid untuk Bo${bo}`);
+      const done = B.isDone(s1, s2, bo), winner = done && s1 !== s2 ? (s1 > s2 ? m.team1_id : m.team2_id) : null;
+      const { error } = await client.from("matches").update({ score1: s1, score2: s2, status: done ? "completed" : live, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
+      if (error) throw error;
+      let final = false;
+      if (t?.format === "round_robin") { // juara = pemuncak klasemen setelah semua match selesai
+        const rows = all.map(x => x.id === m.id ? { ...x, score1: s1, score2: s2, status: done ? "completed" : live } : x);
+        const finished = rows.every(x => x.status === "completed");
+        const ids = [...new Set(rows.flatMap(x => [x.team1_id, x.team2_id]))].filter(Boolean).map(id => ({ id }));
+        const champ = finished ? B.standings(ids, rows).at(0)?.team.id : null;
+        await client.from("tournaments").update({ champion_id: champ || null, ...(finished ? { status: "completed" } : {}) }).eq("id", m.tournament_id);
+        final = finished;
+      }
+      return { winner, final, done, draw: done && !winner };
+    }
+    const ko = all.filter(B.isKO), maxR = Math.max(...ko.map(x => x.round)), bo = B.bestOf(m.round, maxR), wins = Math.ceil(bo / 2);
     if (s1 > wins || s2 > wins || (s1 === wins && s2 === wins)) throw new Error(`Skor tidak valid untuk Bo${bo}`);
     const done = s1 === wins || s2 === wins;
     const winner = done ? (s1 > s2 ? m.team1_id : m.team2_id) : null;
-    const status = done ? "completed" : (t?.status === "live" ? "live" : "scheduled");
-    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status, best_of: bo, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
+    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status: done ? "completed" : live, best_of: bo, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
     if (error) throw error;
     if (m.round < maxR) {
-      const nx = all.find(x => x.round === m.round + 1 && x.position === Math.ceil(m.position / 2));
+      const nx = ko.find(x => x.round === m.round + 1 && x.position === Math.ceil(m.position / 2));
       const { error: e2 } = await client.from("matches").update({ [m.position % 2 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2;
     } else {
       await client.from("tournaments").update({ champion_id: winner, ...(winner ? { status: "completed" } : {}) }).eq("id", m.tournament_id);
@@ -86,18 +103,27 @@
   }
   // Reset semua skor: bracket (seed babak 1 + BYE) dipertahankan, babak berikutnya dikosongkan.
   async function resetScores(tid) {
-    const { data: ms, error } = await client.from("matches").select("id,round,position,team1_id,team2_id,is_bye").eq("tournament_id", tid);
-    if (error) throw error; if (!ms.length) throw new Error("Belum ada match.");
-    const st = ms.map(m => ({ id: m.id, round: m.round, position: m.position, is_bye: m.is_bye, team1_id: m.round === 1 ? m.team1_id : null, team2_id: m.round === 1 ? m.team2_id : null, winner_id: null, status: "scheduled" }));
-    const by = {}; st.forEach(m => by[m.round + "-" + m.position] = m);
-    st.filter(m => m.round === 1 && m.is_bye).forEach(m => {
+    const B = window.ARES_BRACKET;
+    const [{ data: t0 }, { data: ms0, error }] = await Promise.all([
+      client.from("tournaments").select("status,format").eq("id", tid).single(),
+      client.from("matches").select("id,round,position,stage,team1_id,team2_id,is_bye").eq("tournament_id", tid)
+    ]);
+    if (error) throw error; if (!ms0.length) throw new Error("Belum ada match.");
+    let ms = ms0;
+    if (t0?.format === "group_playoffs") { // playoff berasal dari klasemen → dihapus, generate ulang setelah grup selesai
+      const po = ms.filter(m => m.stage === "playoff");
+      if (po.length) await client.from("matches").delete().in("id", po.map(x => x.id));
+      ms = ms.filter(m => m.stage !== "playoff");
+    }
+    const st = ms.map(m => ({ id: m.id, round: m.round, position: m.position, ko: B.isKO(m), is_bye: m.is_bye, team1_id: !B.isKO(m) || m.round === 1 ? m.team1_id : null, team2_id: !B.isKO(m) || m.round === 1 ? m.team2_id : null, winner_id: null, status: "scheduled" }));
+    const by = {}; st.filter(m => m.ko).forEach(m => by[m.round + "-" + m.position] = m);
+    st.filter(m => m.ko && m.round === 1 && m.is_bye).forEach(m => {
       m.winner_id = m.team1_id; m.status = "completed";
       const nx = by["2-" + Math.ceil(m.position / 2)]; if (nx) nx[m.position % 2 ? "team1_id" : "team2_id"] = m.winner_id;
     });
     const res = await Promise.all(st.map(m => client.from("matches").update({ team1_id: m.team1_id, team2_id: m.team2_id, score1: 0, score2: 0, winner_id: m.winner_id, status: m.status }).eq("id", m.id)));
     const bad = res.find(r => r.error); if (bad) throw bad.error;
-    const { data: t } = await client.from("tournaments").select("status").eq("id", tid).single();
-    await client.from("tournaments").update({ champion_id: null, ...(t?.status === "completed" ? { status: "upcoming" } : {}) }).eq("id", tid);
+    await client.from("tournaments").update({ champion_id: null, ...(t0?.status === "completed" ? { status: "upcoming" } : {}) }).eq("id", tid);
     return st.length;
   }
   const scoreOpts = (m) => {

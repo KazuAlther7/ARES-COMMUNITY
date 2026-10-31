@@ -14,6 +14,30 @@
     const runner = done ? (fin.winner_id === fin.team1_id ? fin.team2 : fin.team1) : null;
     return `<div class="b-round is-last champ-col"><div class="b-title">CHAMPION</div><div class="b-matches"><div class="b-item"><div class="b-match b-champ ${champ ? "has" : ""}"><div class="b-head"><span>CHAMPION</span><span>1ST</span></div><div class="champ-body">${TROPHY}${champ ? `<div class="champ-team" data-team="${champ.id}">${logo(champ, "lg")}<strong>${esc(champ.name)}</strong></div>` : '<div class="champ-tbd">TBD</div>'}</div><div class="b-foot">${runner ? `RUNNER-UP · <b data-team="${runner.id}" style="cursor:pointer">${esc(runner.name)}</b>` : "MENUNGGU GRAND FINAL"}</div></div></div></div></div>`;
   };
+  // ----- fase liga / grup: klasemen + jadwal -----
+  const fxRow = (m, A) => {
+    const nm = (x) => x ? esc(x.name) : "TBD", can = A.admin.on && m.team1_id && m.team2_id;
+    return `<div class="fx ${m._st === "live" ? "is-live" : ""}"><span class="fx-no">M${m._no}</span><div class="fx-t r" ${m.team1_id ? `data-team="${m.team1_id}"` : ""}><span>${nm(m.team1)}</span>${m.team1 ? logo(m.team1) : ""}</div><div class="fx-s">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()} · BO${m._bo}</small></div><div class="fx-t" ${m.team2_id ? `data-team="${m.team2_id}"` : ""}>${m.team2 ? logo(m.team2) : ""}<span>${nm(m.team2)}</span></div>${can ? `<div class="b-edit fx-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><button type="button" data-msave>SAVE</button></div>` : ""}</div>`;
+  };
+  function renderLeague(t, lg, teams) {
+    const el = $("t-league"), A = window.ARES;
+    if (!lg.length) { el.hidden = true; el.innerHTML = ""; return; }
+    const tmap = Object.fromEntries(teams.map(x => [x.id, x]));
+    lg.forEach(m => { if (m.team1) tmap[m.team1.id] = m.team1; if (m.team2) tmap[m.team2.id] = m.team2; });
+    const groups = {}; lg.forEach(m => (groups[m.group_name || ""] ||= []).push(m));
+    const isRR = t.format === "round_robin";
+    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">${isRR ? "LEAGUE TABLE" : "GROUP STAGE"}</div><h2>${isRR ? "STANDINGS" : "GROUPS"}<span>.</span></h2></div></div>` +
+      Object.keys(groups).sort().map(g => {
+        const gm = groups[g].sort((a, b) => a.round - b.round || a.position - b.position);
+        const ids = [...new Set(gm.flatMap(m => [m.team1_id, m.team2_id]).filter(Boolean))];
+        const rows = window.ARES_BRACKET.standings(ids.map(i => tmap[i]).filter(Boolean), gm);
+        const rounds = {}; gm.forEach(m => (rounds[m.round] ||= []).push(m));
+        return `<div class="lg-block">${g ? `<h3 class="lg-title">${esc(g)}</h3>` : ""}<div class="tbl-wrap"><table class="standings"><tr><th>#</th><th class="tl">TIM</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>PTS</th></tr>${rows.map((r, i) => `<tr class="${i === 0 && r.P ? "top" : ""} ${t.champion_id === r.team.id ? "champ" : ""}"><td>${i + 1}</td><td class="tl tm" data-team="${r.team.id}">${logo(r.team)}<span>${esc(r.team.name)}</span>${t.champion_id === r.team.id ? " 🏆" : ""}</td><td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.GF}</td><td>${r.GA}</td><td>${r.GD > 0 ? "+" : ""}${r.GD}</td><td><b>${r.Pts}</b></td></tr>`).join("")}</table></div>
+        <p class="hint">Menang 3 poin · seri 1 · kalah 0. Poin sama → selisih gol (GD), lalu gol masuk (GF). Gol = kemenangan game.</p>
+        ${Object.keys(rounds).sort((a, b) => a - b).map(r => `<div class="fx-round"><div class="eyebrow">MATCHDAY ${r}</div>${rounds[r].map(m => fxRow(m, A)).join("")}</div>`).join("")}</div>`;
+      }).join("");
+    el.hidden = false;
+  }
   async function load() {
     const [{ data: t, error }, { data: ms }, { data: teams }] = await Promise.all([
       client.from("tournaments").select("*").eq("id", id).single(),
@@ -33,8 +57,12 @@
     const A = window.ARES;
     A.annotate(ms || [], t.status);
     window.__ms = ms || [];
+    const ko = (ms || []).filter(m => m._ko), lg = (ms || []).filter(m => !m._ko);
+    renderLeague(t, lg, teams || []);
+    $("t-bracket-sec").hidden = !ko.length && t.format !== "single_elimination";
+    $("t-bracket-h").innerHTML = (lg.length ? "PLAYOFFS" : "BRACKET") + "<span>.</span>";
     const rounds = {};
-    (ms || []).forEach(m => (rounds[m.round] ||= []).push(m));
+    ko.forEach(m => (rounds[m.round] ||= []).push(m));
     const keys = Object.keys(rounds).sort((a, b) => a - b), last = keys[keys.length - 1];
     $("t-live").textContent = (ms || []).some(m => m._st === "live") ? "● LIVE NOW" : "";
     $("bracket").className = "bracket" + (A.admin.on ? " adm" : "");
