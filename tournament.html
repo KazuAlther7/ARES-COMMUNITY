@@ -19,6 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css?v=10">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -35,8 +36,8 @@
     <section class="section" id="t-scorepanel" style="padding-top:40px" hidden></section>
     <section class="section" id="t-league" style="padding-top:40px" hidden></section>
     <section class="section" id="t-bracket-sec" style="padding-top:40px">
-      <div class="section-heading"><div><div class="eyebrow">THE PATH TO GLORY</div><h2 id="t-bracket-h">BRACKET<span>.</span></h2></div><span class="live-pill" id="t-live"></span></div>
-      <div class="bracket-wrap"><div class="bracket" id="bracket"></div></div>
+      <div class="section-heading"><div><div class="eyebrow">THE PATH TO GLORY</div><h2 id="t-bracket-h">BRACKET<span>.</span></h2></div><span class="live-pill" id="t-live"></span><button type="button" class="text-link" data-export="t-bracket-wrap">EXPORT PNG <b>↓</b></button></div>
+      <div class="bracket-wrap" id="t-bracket-wrap"><div class="bracket" id="bracket"></div></div>
       <p class="hint">Klik nama tim untuk melihat roster.</p>
     </section>
     <section class="section" style="padding-top:40px" id="t-info"></section>
