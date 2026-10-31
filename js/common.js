@@ -11,7 +11,7 @@
   const roleIcon = (role, size = 22) => ROLES[role] ? `<img class="role-ico" src="assets/roles/${ROLES[role]}.png" width="${size}" height="${size}" alt="${esc(role)}">` : "";
   const logo = (t, cls = "") => t?.logo_url
     ? `<span class="team-emblem ${cls}"><img src="${esc(t.logo_url)}" alt=""></span>`
-    : `<span class="team-emblem ${cls}">${esc((t?.tag || t?.name || "?").slice(0, 2).toUpperCase())}</span>`;
+    : `<span class="team-emblem ${cls}">${esc((t?.name || "?").slice(0, 2).toUpperCase())}</span>`;
 
   // Kecilkan gambar besar (foto HP) sebelum upload agar cepat.
   async function shrink(file, max = 1400) {
@@ -53,7 +53,7 @@
     if (!team) { body.innerHTML = '<div class="empty-state">Tim tidak ditemukan.</div>'; return; }
     const row = (p) => `<li class="player"><span class="player-role">${roleIcon(p.role, 26)}<small>${esc(p.role || "—")}</small></span><div><strong>${esc(p.nickname)}</strong>${p.is_captain ? '<em class="cap">CAPTAIN</em>' : ""}</div></li>`;
     const main = (players || []).filter(p => !p.is_sub), subs = (players || []).filter(p => p.is_sub);
-    body.innerHTML = `<div class="roster-head">${logo(team, "xl")}<div><div class="eyebrow">${esc(team.tag || "TEAM")}</div><h3>${esc(team.name)}</h3>${team.tournaments?.name ? `<small>${esc(team.tournaments.name)}</small>` : ""}</div></div>
+    body.innerHTML = `<div class="roster-head">${logo(team, "xl")}<div><h3>${esc(team.name)}</h3>${team.tag ? `<p class="slogan">“${esc(team.tag)}”</p>` : ""}${team.tournaments?.name ? `<small>${esc(team.tournaments.name)}</small>` : ""}</div></div>
       <div class="eyebrow">STARTING ROSTER</div><ul class="roster">${main.map(row).join("") || '<li class="muted-li">Roster belum diisi.</li>'}</ul>
       ${subs.length ? `<div class="eyebrow" style="margin-top:18px">SUBSTITUTES</div><ul class="roster">${subs.map(row).join("")}</ul>` : ""}`;
   }

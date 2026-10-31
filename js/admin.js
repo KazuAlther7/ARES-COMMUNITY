@@ -122,7 +122,7 @@
     $("panel").innerHTML = `<div class="a-card" style="margin-bottom:18px"><div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap"><label style="max-width:420px;margin:0;flex:1;min-width:220px">Turnamen aktif<select id="tsel">${tOpts(selT)}</select></label>${cur ? '<button type="button" class="btn-primary" id="bulkbtn">BULK ADD · SPREADSHEET</button>' : ""}</div>${cur ? `<small style="color:#888;display:block;margin-top:10px">Tim di sini otomatis tampil di halaman turnamen &amp; menu Teams publik · ${inT.length}${cur.max_teams ? " / " + cur.max_teams : ""} tim</small>` : '<div class="empty-state" style="margin-top:14px">Buat turnamen dulu di menu Tournaments.</div>'}</div>
     <div class="admin-grid">
     <form class="a-card" id="tmf"><h3>${t.id ? "EDIT" : "ADD"} TEAM${cur && !t.id ? " → " + esc(cur.name) : ""}</h3>
-      <div class="row2"><label>Nama tim<input name="name" required value="${esc(t.name)}"></label><label>Tag<input name="tag" maxlength="6" value="${esc(t.tag)}"></label></div>
+      <div class="row2"><label>Nama tim<input name="name" required value="${esc(t.name)}"></label><label>Tag / Slogan<input name="tag" maxlength="120" value="${esc(t.tag)}"></label></div>
       <div class="row2"><label>Turnamen<select name="tournament_id">${tOpts(t.id ? t.tournament_id : selT, "— tanpa turnamen —")}</select></label><label>Logo tim<input name="logo" type="file" accept="image/*"></label></div>
       <div class="eyebrow" style="margin-top:8px">ROSTER · 5 UTAMA + MAKS 2 CADANGAN</div>${rows}
       <button class="btn-primary" type="submit">${t.id ? "SAVE TEAM" : "ADD TEAM"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tmcancel">CANCEL</button>' : ""}</form>
@@ -132,7 +132,7 @@
     if ($("bulkbtn")) $("bulkbtn").onclick = () => ARES_BULK.open($("panel"), { sb, tournament: cur, existing: inT, esc, toast, fmtErr, done: () => renderTeams() });
     $("tmf").onsubmit = (e) => { e.preventDefault(); run(async () => {
       const f = new FormData(e.target);
-      const row = { name: f.get("name").trim(), tag: (f.get("tag") || "").trim().toUpperCase() || null, tournament_id: f.get("tournament_id") || null };
+      const row = { name: f.get("name").trim(), tag: (f.get("tag") || "").trim() || null, tournament_id: f.get("tournament_id") || null };
       if (row.tournament_id && row.tournament_id !== t.tournament_id) {
         const tt = tournaments.find(z => z.id === row.tournament_id), n = teams.filter(z => z.tournament_id === row.tournament_id).length;
         if (tt?.max_teams && n >= tt.max_teams) throw new Error(`Turnamen penuh (${tt.max_teams} tim).`);

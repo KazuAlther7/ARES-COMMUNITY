@@ -43,7 +43,7 @@
     const low = headers.map(x => String(x || "").toLowerCase().trim()), used = new Set();
     const take = (k, i) => { m[k] = i; used.add(i); };
     low.forEach((x, i) => { if (m.logo < 0 && /logo|lambang|emblem|foto tim|gambar/.test(x)) take("logo", i); });
-    low.forEach((x, i) => { if (!used.has(i) && m.tag < 0 && /\btag\b|singkatan|inisial|abbrev/.test(x)) take("tag", i); });
+    low.forEach((x, i) => { if (!used.has(i) && m.tag < 0 && /\btag\b|slogan|motto|tagline|semboyan|yel.?yel|singkatan|inisial|abbrev/.test(x)) take("tag", i); });
     low.forEach((x, i) => { if (!used.has(i) && m.roster < 0 && /roster|susunan|daftar pemain|line.?up/.test(x)) take("roster", i); });
     low.forEach((x, i) => { if (!used.has(i) && m.team < 0 && /nama\s*(tim|team|squad)|team\s*name|^(tim|team|squad)$/.test(x)) take("team", i); });
     if (m.team < 0) low.forEach((x, i) => { if (!used.has(i) && m.team < 0 && /\b(tim|team|squad)\b/.test(x) && !/kapten|captain|ketua|pemain|player/.test(x) && !SKIP.test(x)) take("team", i); });
@@ -54,7 +54,9 @@
       if (isRole && /server/.test(x)) return;
       const isSub = /\b(cadangan|substitute|substitusi|sub|reserve|bench|cad)\b/.test(x), num = (x.match(/(\d+)/) || [])[1];
       let slot = -1;
-      if (isSub) slot = 4 + (num ? +num : 1); else if (num) slot = +num - 1;
+      const tk = isRole ? "r" : "n";
+      if (isSub) { if (num && +num >= 6) slot = +num - 1; else if (num) slot = 4 + +num; else slot = m[tk + "5"] < 0 ? 5 : 6; }
+      else if (num) slot = +num - 1;
       if (slot >= 0 && slot <= 6 && (isRole || isCap || /nick|ign|nama|pemain|player|anggota|member|in.?game|name/.test(x))) {
         const k = (isRole ? "r" : "n") + slot;
         if (m[k] < 0) { take(k, i); if (isCap && !isRole && m.captain < 0) m.captain = i; if (isCap && isRole && m.capRole < 0) m.capRole = i; }
@@ -106,7 +108,7 @@
       if (subs.length > 2) { warns.push("cadangan > 2, sisanya dibuang"); subs = subs.slice(0, 2); }
       if (main.length < 5) warns.push(`pemain utama baru ${main.length}/5`);
       players = main.concat(subs).map((p, i) => ({ ...p, sort_order: i }));
-      return { row: idx, no: idx + 1, name, tag: (g(r, "tag") || autoTag(name)).slice(0, 6).toUpperCase(), logo_url: driveUrl(g(r, "logo")), captain: cap, players, warns };
+      return { row: idx, no: idx + 1, name, tag: g(r, "tag").slice(0, 120) || null, logo_url: driveUrl(g(r, "logo")), captain: cap, players, warns };
     }).filter(Boolean);
   }
 
@@ -117,7 +119,8 @@
   root.ARES_BULK = {
     ...api,
     open(panel, ctx) {
-      const esc = ctx.esc, S = { text: "", rows: [], map: null, teams: [], checked: new Set() };
+      const esc = ctx.esc, S = { text: "", rows: [], map: null, teams: [], checked: new Set(), upd: false };
+      const byName = new Map(ctx.existing.map(t => [(t.name || "").trim().toLowerCase(), t]));
       const existingNames = new Set(ctx.existing.map(t => (t.name || "").trim().toLowerCase()));
       const roleTxt = (p) => `${esc(p.nickname)}${p.is_captain ? " ★" : ""} <i>${p.role || "?"}</i>`;
       function view() {
@@ -134,7 +137,8 @@
           ${S.rows.length ? `<div class="eyebrow" style="margin-top:24px">2 · KOLOM TERDETEKSI <small style="color:#777">(ubah bila salah)</small></div>
           <details ${S.map.team < 0 ? "open" : ""}><summary style="cursor:pointer;color:var(--gold);font-size:11px;letter-spacing:1px;margin:8px 0">PENGATURAN KOLOM</summary><div class="bk-map">${FIELDS.map(([k, l]) => `<label>${l}<select data-map="${k}">${opts(S.map[k])}</select></label>`).join("")}</div></details>
           <div class="eyebrow" style="margin-top:20px">3 · PREVIEW · ${S.teams.length} TIM</div>
-          ${S.map.team < 0 ? '<div class="empty-state">Kolom “Nama tim” belum terdeteksi — pilih di Pengaturan Kolom.</div>' : `<div style="overflow-x:auto"><table class="bulk-table"><tr><th></th><th>NO</th><th>LOGO</th><th>TIM</th><th>KAPTEN</th><th>ROSTER</th><th>CATATAN</th></tr>${S.teams.map(t => { const dup = existingNames.has(t.name.toLowerCase()); return `<tr class="${dup ? "dim" : ""}"><td><input type="checkbox" data-row="${t.row}" ${S.checked.has(t.row) ? "checked" : ""}></td><td>${t.no}</td><td>${t.logo_url ? `<img src="${esc(t.logo_url)}" onerror="this.replaceWith(document.createTextNode('✕'))" alt="">` : "—"}</td><td><b>${esc(t.name)}</b><small>${esc(t.tag)}</small></td><td>${esc(t.captain || "—")}</td><td>${t.players.map(p => `<span class="chip ${p.is_sub ? "sub" : ""}">${roleTxt(p)}</span>`).join("") || "—"}</td><td class="warn">${dup ? "SUDAH ADA · " : ""}${t.warns.map(esc).join("<br>")}</td></tr>`; }).join("")}</table></div>
+          <label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="bk-upd" ${S.upd ? "checked" : ""}> Update tim yang sudah ada (timpa roster &amp; slogan; logo diganti bila ada)</label>
+          ${S.map.team < 0 ? '<div class="empty-state">Kolom “Nama tim” belum terdeteksi — pilih di Pengaturan Kolom.</div>' : `<div style="overflow-x:auto"><table class="bulk-table"><tr><th></th><th>NO</th><th>LOGO</th><th>TIM</th><th>KAPTEN</th><th>ROSTER</th><th>CATATAN</th></tr>${S.teams.map(t => { const dup = existingNames.has(t.name.toLowerCase()); return `<tr class="${dup && !S.upd ? "dim" : ""}"><td><input type="checkbox" data-row="${t.row}" ${S.checked.has(t.row) ? "checked" : ""}></td><td>${t.no}</td><td>${t.logo_url ? `<img src="${esc(t.logo_url)}" onerror="this.replaceWith(document.createTextNode('✕'))" alt="">` : "—"}</td><td><b>${esc(t.name)}</b><small>${esc(t.tag || "")}</small></td><td>${esc(t.captain || "—")}</td><td>${t.players.map(p => `<span class="chip ${p.is_sub ? "sub" : ""}">${roleTxt(p)}</span>`).join("") || "—"}</td><td class="warn">${dup ? (S.upd ? "UPDATE · " : "SUDAH ADA · ") : ""}${t.warns.map(esc).join("<br>")}</td></tr>`; }).join("")}</table></div>
           <small style="color:#888;display:block;margin:10px 0">Logo dari Google Drive hanya tampil publik bila file/folder dibagikan “siapa saja dengan link”. Logo yang gagal (✕) bisa diupload manual lewat Edit tim.</small>
           <button class="btn-primary" id="bk-import">IMPORT ${S.checked.size} TIM</button>${remain !== null ? ` <small style="color:#888">sisa slot: ${remain}</small>` : ""}`}` : ""}</div>`;
         bind();
@@ -146,7 +150,7 @@
       }
       function recompute(resetChecks) {
         S.teams = buildTeams(S.rows, S.map);
-        if (resetChecks) S.checked = new Set(S.teams.filter(t => !existingNames.has(t.name.toLowerCase())).map(t => t.row));
+        if (resetChecks) S.checked = new Set(S.teams.filter(t => S.upd || !existingNames.has(t.name.toLowerCase())).map(t => t.row));
         view();
       }
       function bind() {
@@ -160,23 +164,35 @@
           try { const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv${gid ? "&gid=" + gid : ""}`); if (!r.ok) throw new Error(r.status); load(await r.text()); }
           catch (e) { ctx.toast("Gagal ambil dari link (sheet belum publik / diblokir). Pakai tempel atau file CSV.", true); }
         };
+        $("#bk-upd") && ($("#bk-upd").onchange = (e) => { S.upd = e.target.checked; recompute(true); });
         panel.querySelectorAll("[data-map]").forEach(s => s.onchange = () => { S.map[s.dataset.map] = +s.value; recompute(true); });
         panel.querySelectorAll("[data-row]").forEach(c => c.onchange = () => { c.checked ? S.checked.add(+c.dataset.row) : S.checked.delete(+c.dataset.row); const b = panel.querySelector("#bk-import"); if (b) b.textContent = `IMPORT ${S.checked.size} TIM`; });
         const imp = $("#bk-import"); if (imp) imp.onclick = () => doImport(imp);
       }
       async function doImport(btn) {
         const sel = S.teams.filter(t => S.checked.has(t.row));
+        const upd = sel.filter(t => byName.has(t.name.toLowerCase())), add = sel.filter(t => !byName.has(t.name.toLowerCase()));
+        let inserted = [];
         try {
           if (!sel.length) throw new Error("Pilih minimal 1 tim.");
           const max = ctx.tournament.max_teams;
-          if (max && ctx.existing.length + sel.length > max) throw new Error(`Melebihi kapasitas turnamen (${max}). Sekarang ${ctx.existing.length}, akan menambah ${sel.length}.`);
+          if (max && ctx.existing.length + add.length > max) throw new Error(`Melebihi kapasitas turnamen (${max}). Sekarang ${ctx.existing.length}, akan menambah ${add.length}.`);
           btn.disabled = true; btn.textContent = "IMPORTING…";
-          const { data: ins, error } = await ctx.sb.from("teams").insert(sel.map(t => ({ name: t.name, tag: t.tag, logo_url: t.logo_url, tournament_id: ctx.tournament.id }))).select("id");
-          if (error) throw error;
-          const pl = []; sel.forEach((t, i) => t.players.forEach(p => pl.push({ team_id: ins[i].id, nickname: p.nickname, role: p.role, is_sub: p.is_sub, is_captain: p.is_captain, sort_order: p.sort_order })));
-          if (pl.length) { const { error: e2 } = await ctx.sb.from("players").insert(pl); if (e2) { await ctx.sb.from("teams").delete().in("id", ins.map(x => x.id)); throw e2; } }
-          ctx.toast(`${sel.length} tim & ${pl.length} pemain berhasil diimport`); ctx.done();
-        } catch (e) { ctx.toast(ctx.fmtErr(e), true); btn.disabled = false; btn.textContent = `IMPORT ${S.checked.size} TIM`; }
+          const pl = [];
+          if (add.length) {
+            const { data: ins, error } = await ctx.sb.from("teams").insert(add.map(t => ({ name: t.name, tag: t.tag, logo_url: t.logo_url, tournament_id: ctx.tournament.id }))).select("id");
+            if (error) throw error; inserted = ins.map(x => x.id);
+            add.forEach((t, i) => t.players.forEach(p => pl.push({ team_id: ins[i].id, nickname: p.nickname, role: p.role, is_sub: p.is_sub, is_captain: p.is_captain, sort_order: p.sort_order })));
+          }
+          for (const t of upd) {
+            const ex = byName.get(t.name.toLowerCase()), patch = { tag: t.tag }; if (t.logo_url) patch.logo_url = t.logo_url;
+            const { error } = await ctx.sb.from("teams").update(patch).eq("id", ex.id); if (error) throw error;
+            const { error: e1 } = await ctx.sb.from("players").delete().eq("team_id", ex.id); if (e1) throw e1;
+            t.players.forEach(p => pl.push({ team_id: ex.id, nickname: p.nickname, role: p.role, is_sub: p.is_sub, is_captain: p.is_captain, sort_order: p.sort_order }));
+          }
+          if (pl.length) { const { error: e2 } = await ctx.sb.from("players").insert(pl); if (e2) throw e2; }
+          ctx.toast(`${add.length} tim baru, ${upd.length} diupdate · ${pl.length} pemain`); ctx.done();
+        } catch (e) { if (inserted.length) await ctx.sb.from("teams").delete().in("id", inserted); ctx.toast(ctx.fmtErr(e), true); btn.disabled = false; btn.textContent = `IMPORT ${S.checked.size} TIM`; }
       }
       view();
     }
