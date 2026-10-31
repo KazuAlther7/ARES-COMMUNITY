@@ -161,7 +161,7 @@
     const { data: ms } = selT ? await sb.from("matches").select("*, team1:teams!matches_team1_id_fkey(id,name), team2:teams!matches_team2_id_fkey(id,name)").eq("tournament_id", selT).order("round").order("position") : { data: [] };
     ARES.annotate(ms || [], cur?.status);
     const byRound = {}; (ms || []).forEach(m => (byRound[m.round] ||= []).push(m));
-    $("panel").innerHTML = `<div class="a-card"><h3>MATCHES</h3><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
+    $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3>${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
       ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (Final Bo5, Semi Final Bo3, lainnya Bo1).</small>` : ""}
       ${Object.keys(byRound).sort((a, b) => a - b).map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
         <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || "TBD")}</div>
@@ -170,6 +170,7 @@
         <span class="m-st">${esc(m._st.toUpperCase())}</span>
         <input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}"><button class="btn-primary sm" data-save ${ok ? "" : "disabled"}>SAVE</button></div>`; }).join("")}`).join("") || '<div class="empty-state">Belum ada match. Buat bracket dari menu Tournaments.</div>'}</div>`;
     $("msel").onchange = (e) => { selT = e.target.value; renderMatches(); };
+    if ($("resetall")) $("resetall").onclick = (e) => { if (!confirm("Reset SEMUA skor turnamen ini? Skor, pemenang, dan juara dihapus (bracket awal tetap).")) return; run(async () => { const n = await ARES.resetScores(selT); toast(`${n} match direset`); renderMatches(); }, e.currentTarget); };
     $("panel").onclick = (e) => { const b = e.target.closest("[data-save]"); if (!b) return; run(() => saveMatch(ms.find(x => x.id === b.closest(".m-row").dataset.id), b.closest(".m-row")), b); };
   }
 

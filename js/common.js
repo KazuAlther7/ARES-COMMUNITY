@@ -84,10 +84,26 @@
     }
     return { winner, final: m.round === maxR, done };
   }
+  // Reset semua skor: bracket (seed babak 1 + BYE) dipertahankan, babak berikutnya dikosongkan.
+  async function resetScores(tid) {
+    const { data: ms, error } = await client.from("matches").select("id,round,position,team1_id,team2_id,is_bye").eq("tournament_id", tid);
+    if (error) throw error; if (!ms.length) throw new Error("Belum ada match.");
+    const st = ms.map(m => ({ id: m.id, round: m.round, position: m.position, is_bye: m.is_bye, team1_id: m.round === 1 ? m.team1_id : null, team2_id: m.round === 1 ? m.team2_id : null, winner_id: null, status: "scheduled" }));
+    const by = {}; st.forEach(m => by[m.round + "-" + m.position] = m);
+    st.filter(m => m.round === 1 && m.is_bye).forEach(m => {
+      m.winner_id = m.team1_id; m.status = "completed";
+      const nx = by["2-" + Math.ceil(m.position / 2)]; if (nx) nx[m.position % 2 ? "team1_id" : "team2_id"] = m.winner_id;
+    });
+    const res = await Promise.all(st.map(m => client.from("matches").update({ team1_id: m.team1_id, team2_id: m.team2_id, score1: 0, score2: 0, winner_id: m.winner_id, status: m.status }).eq("id", m.id)));
+    const bad = res.find(r => r.error); if (bad) throw bad.error;
+    const { data: t } = await client.from("tournaments").select("status").eq("id", tid).single();
+    await client.from("tournaments").update({ champion_id: null, ...(t?.status === "completed" ? { status: "upcoming" } : {}) }).eq("id", tid);
+    return st.length;
+  }
   const scoreOpts = (m) => {
     const o = window.ARES_BRACKET.scoreOptions(m._bo), cur = [m.score1 || 0, m.score2 || 0];
     if (!o.some(x => x[0] === cur[0] && x[1] === cur[1])) o.push(cur);
     return o.map(([a, b]) => `<option value="${a}-${b}" ${a === cur[0] && b === cur[1] ? "selected" : ""}>${a} : ${b}</option>`).join("");
   };
-  window.ARES = { saveMatchResult, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
+  window.ARES = { saveMatchResult, resetScores, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
 })();
