@@ -68,7 +68,7 @@
       <label>Rules<textarea name="rules" rows="4">${esc(t.rules)}</textarea></label>
       <div class="row2"><label>Logo<input name="logo" type="file" accept="image/*"></label><label>Banner<input name="banner" type="file" accept="image/*"></label></div>
       <button class="btn-primary" type="submit">${t.id ? "SAVE CHANGES" : "CREATE TOURNAMENT"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tcancel">CANCEL</button>' : ""}</form>
-    <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate bracket</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
+    <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate bracket</button><button data-act="share" data-id="${x.id}">Share</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
     $("tf").onsubmit = (e) => { e.preventDefault(); const btn = e.submitter; run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), format: f.get("format"), status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
@@ -89,6 +89,7 @@
       if (b.dataset.act === "del" && confirm(`Hapus "${x.name}" beserta semua match-nya?`)) run(async () => { const { error } = await sb.from("tournaments").delete().eq("id", x.id); if (error) throw error; toast("Dihapus"); render(); });
       if (b.dataset.act === "bracket") run(() => generateBracket(x));
       if (b.dataset.act === "teams") goTab("teams", x.id);
+      if (b.dataset.act === "share") { const u = new URL("tournament.html?id=" + x.id, location.href).href; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast("Link disalin: " + u), () => prompt("Salin link:", u)); }
     };
   }
 
@@ -118,7 +119,7 @@
     const rows = Array.from({ length: 7 }, (_, i) => { const sub = i >= 5; const p = P.filter(x => !!x.is_sub === sub)[sub ? i - 5 : i] || {};
       return `<div class="p-row"><span class="p-n">${sub ? "SUB " + (i - 4) : "P" + (i + 1)}</span><input name="nick${i}" placeholder="Nickname" value="${esc(p.nickname)}"><select name="role${i}">${opts(ROLE_LIST.map(r => [r, r]), p.role, "Role")}</select>${sub ? "<span></span>" : `<label class="cap-r"><input type="radio" name="cap" value="${i}" ${p.is_captain ? "checked" : ""}> Cap</label>`}</div>`; }).join("");
     const trow = (x) => `<div class="a-row"><div style="display:flex;gap:12px;align-items:center">${ARES.logo(x)}<div><strong>${esc(x.name)}</strong><small>${esc(x.tag || "")}</small></div></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`;
-    $("panel").innerHTML = `<div class="a-card" style="margin-bottom:18px"><label style="max-width:420px;margin:0">Turnamen aktif<select id="tsel">${tOpts(selT)}</select></label>${cur ? `<small style="color:#888;display:block;margin-top:10px">Tim di sini otomatis tampil di halaman turnamen &amp; menu Teams publik · ${inT.length}${cur.max_teams ? " / " + cur.max_teams : ""} tim</small>` : '<div class="empty-state" style="margin-top:14px">Buat turnamen dulu di menu Tournaments.</div>'}</div>
+    $("panel").innerHTML = `<div class="a-card" style="margin-bottom:18px"><div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap"><label style="max-width:420px;margin:0;flex:1;min-width:220px">Turnamen aktif<select id="tsel">${tOpts(selT)}</select></label>${cur ? '<button type="button" class="btn-primary" id="bulkbtn">BULK ADD · SPREADSHEET</button>' : ""}</div>${cur ? `<small style="color:#888;display:block;margin-top:10px">Tim di sini otomatis tampil di halaman turnamen &amp; menu Teams publik · ${inT.length}${cur.max_teams ? " / " + cur.max_teams : ""} tim</small>` : '<div class="empty-state" style="margin-top:14px">Buat turnamen dulu di menu Tournaments.</div>'}</div>
     <div class="admin-grid">
     <form class="a-card" id="tmf"><h3>${t.id ? "EDIT" : "ADD"} TEAM${cur && !t.id ? " → " + esc(cur.name) : ""}</h3>
       <div class="row2"><label>Nama tim<input name="name" required value="${esc(t.name)}"></label><label>Tag<input name="tag" maxlength="6" value="${esc(t.tag)}"></label></div>
@@ -128,6 +129,7 @@
     <div class="a-card"><h3>TEAMS${cur ? " · " + esc(cur.name) : ""}</h3>${inT.map(trow).join("") || '<div class="empty-state">Belum ada tim di turnamen ini.</div>'}
       ${orphan.length ? `<div class="eyebrow" style="margin:22px 0 4px">TANPA TURNAMEN (edit → pilih turnamen)</div>${orphan.map(trow).join("")}` : ""}</div></div>`;
     $("tsel").onchange = (e) => { selT = e.target.value; renderTeams(); };
+    if ($("bulkbtn")) $("bulkbtn").onclick = () => ARES_BULK.open($("panel"), { sb, tournament: cur, existing: inT, esc, toast, fmtErr, done: () => renderTeams() });
     $("tmf").onsubmit = (e) => { e.preventDefault(); run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), tag: (f.get("tag") || "").trim().toUpperCase() || null, tournament_id: f.get("tournament_id") || null };
