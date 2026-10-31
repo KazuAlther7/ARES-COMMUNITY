@@ -28,6 +28,7 @@ Admin dashboard, tournament CRUD, roster editor, bracket generation, score edito
 Jalankan sekali di Supabase SQL Editor (kalau kolom belum ada):
 ```sql
 alter table tournaments add column if not exists standings_mode text not null default 'normal';
+alter table tournaments add column if not exists qualify_count integer;
 ```
 
 ## Folder convention
