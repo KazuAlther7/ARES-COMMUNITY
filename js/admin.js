@@ -70,7 +70,7 @@
       <label>Rules<textarea name="rules" rows="4">${esc(t.rules)}</textarea></label>
       <div class="row2"><label>Logo<input name="logo" type="file" accept="image/*"></label><label>Banner<input name="banner" type="file" accept="image/*"></label></div>
       <button class="btn-primary" type="submit">${t.id ? "SAVE CHANGES" : "CREATE TOURNAMENT"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tcancel">CANCEL</button>' : ""}</form>
-    <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate jadwal/bracket</button>${x.format === "group_playoffs" ? `<button data-act="playoffs" data-id="${x.id}">Generate playoffs</button>` : ""}<button data-act="share" data-id="${x.id}">Share</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
+    <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}${x.is_hidden ? ' <small style="color:#ff8a91">· HIDDEN</small>' : ""}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate jadwal/bracket</button>${x.format === "group_playoffs" ? `<button data-act="playoffs" data-id="${x.id}">Generate playoffs</button>` : ""}<button data-act="hide" data-id="${x.id}">${x.is_hidden ? "Unhide" : "Hide"}</button><button data-act="share" data-id="${x.id}">Share</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
     $("tf").onsubmit = (e) => { e.preventDefault(); const btn = e.submitter; run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: f.get("standings_mode") || "normal", qualify_count: +f.get("qualify_count") || null, status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
@@ -91,6 +91,7 @@
       if (b.dataset.act === "del" && confirm(`Hapus "${x.name}" beserta semua match-nya?`)) run(async () => { const { error } = await sb.from("tournaments").delete().eq("id", x.id); if (error) throw error; toast("Dihapus"); render(); });
       if (b.dataset.act === "bracket") run(() => generateBracket(x));
       if (b.dataset.act === "playoffs") run(() => generatePlayoffs(x));
+      if (b.dataset.act === "hide") run(async () => { const { error } = await sb.from("tournaments").update({ is_hidden: !x.is_hidden }).eq("id", x.id); if (error) throw error; toast(x.is_hidden ? "Ditampilkan lagi" : "Disembunyikan dari publik"); render(); });
       if (b.dataset.act === "teams") goTab("teams", x.id);
       if (b.dataset.act === "share") { const u = new URL("tournament.html?id=" + x.id, location.href).href; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast("Link disalin: " + u), () => prompt("Salin link:", u)); }
     };
@@ -186,7 +187,8 @@
     const { data: ms } = selT ? await sb.from("matches").select("*, team1:teams!matches_team1_id_fkey(id,name), team2:teams!matches_team2_id_fkey(id,name)").eq("tournament_id", selT).order("round").order("position") : { data: [] };
     ARES.annotate(ms || [], cur?.status);
     const byRound = {}; (ms || []).forEach(m => (byRound[(m._ko ? "1" : "0") + "|" + String(m.round).padStart(3, "0") + "|" + (m.group_name || "")] ||= []).push(m));
-    $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3>${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
+    const editableCount = (ms || []).filter(m => !m.is_bye && m.team1_id && m.team2_id).length;
+    $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3><div style="display:flex;gap:8px">${editableCount ? '<button type="button" class="btn-primary sm" id="saveallm">SAVE ALL</button>' : ""}${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div></div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
       ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (knockout: Final Bo5, Semi Final Bo3, lainnya Bo1; liga/grup sesuai Bo yang dipilih — Bo2 boleh seri).</small>` : ""}
       ${Object.keys(byRound).sort().map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
         <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || "TBD")}</div>
@@ -196,13 +198,21 @@
         <input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}"><button class="btn-primary sm" data-save ${ok ? "" : "disabled"}>SAVE</button></div>`; }).join("")}`).join("") || '<div class="empty-state">Belum ada match. Buat bracket dari menu Tournaments.</div>'}</div>`;
     $("msel").onchange = (e) => { selT = e.target.value; renderMatches(); };
     if ($("resetall")) $("resetall").onclick = (e) => { if (!confirm("Reset SEMUA skor turnamen ini? Skor, pemenang, dan juara dihapus (bracket awal tetap).")) return; run(async () => { const n = await ARES.resetScores(selT); toast(`${n} match direset`); renderMatches(); }, e.currentTarget); };
+    if ($("saveallm")) $("saveallm").onclick = async (e) => {
+      const btn = e.currentTarget, rows = [...document.querySelectorAll(".m-row")].filter(r => r.querySelector(".sc2"));
+      btn.disabled = true; let i = 0, fail = [];
+      for (const row of rows) { i++; btn.textContent = `SAVING ${i}/${rows.length}…`;
+        try { await saveMatch(ms.find(x => x.id === row.dataset.id), row, true); } catch (err) { fail.push(row.querySelector(".m-no").textContent + ": " + (err.message || err)); } }
+      if (fail.length) toast("Sebagian gagal: " + fail.join("; "), true); else toast("Semua skor tersimpan");
+      renderMatches();
+    };
     $("panel").onclick = (e) => { const b = e.target.closest("[data-save]"); if (!b) return; run(() => saveMatch(ms.find(x => x.id === b.closest(".m-row").dataset.id), b.closest(".m-row")), b); };
   }
 
-  async function saveMatch(m, el) {
+  async function saveMatch(m, el, silent) {
     const q = (n) => el.querySelector(`[name=${n}]`).value, [s1, s2] = q("sc").split("-").map(Number);
     const r = await ARES.saveMatchResult(m, s1, s2, fromLocal(q("when")));
-    toast(r.winner && r.final ? "🏆 Juara ditetapkan" : r.done ? "Match selesai — pemenang lanjut ke babak berikutnya" : "Skor tersimpan"); renderMatches();
+    if (!silent) { toast(r.winner && r.final ? "🏆 Juara ditetapkan" : r.done ? "Match selesai — pemenang lanjut ke babak berikutnya" : "Skor tersimpan"); renderMatches(); }
   }
 
   init();

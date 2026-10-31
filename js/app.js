@@ -14,14 +14,16 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const money = (n) => new Intl.NumberFormat("id-ID").format(Number(n || 0));
   async function loadTournaments() {
-    const { data, error } = await client.from("tournaments").select("*").order("created_at", {ascending:false}).limit(50);
+    const { data: all, error } = await client.from("tournaments").select("*").order("created_at", {ascending:false}).limit(50);
     if (error) return empty($("tournament-list"), "Belum dapat memuat turnamen. Periksa SQL schema dan Supabase RLS.");
+    const data = window.ARES.admin.on ? all : all.filter(t => !t.is_hidden);
     if ($("stat-tournaments")) $("stat-tournaments").textContent = data.length;
-    if ($("tournament-list")) $("tournament-list").innerHTML = data.length ? data.map(t => `<a class="tournament-card" href="tournament.html?id=${t.id}"><div class="card-top"><span class="tag">${esc((t.format || "TOURNAMENT").replaceAll("_"," "))}</span><span class="status">${esc(t.status || "upcoming")}</span></div><h3>${esc(t.name)}</h3><p>${esc(t.description || "Official ARES COMMUNITY tournament.")}</p><div class="card-meta"><span>PRIZE POOL</span><strong>Rp ${money(t.prize_pool)}</strong></div></a>`).join("") : '<div class="empty-state">Belum ada turnamen. Nantikan pengumuman berikutnya.</div>';
+    if ($("tournament-list")) $("tournament-list").innerHTML = data.length ? data.map(t => `<a class="tournament-card" href="tournament.html?id=${t.id}">${t.is_hidden ? '<span class="tag hidden-tag">HIDDEN</span>' : ""}<div class="card-top"><span class="tag">${esc((t.format || "TOURNAMENT").replaceAll("_"," "))}</span><span class="status">${esc(t.status || "upcoming")}</span></div><h3>${esc(t.name)}</h3><p>${esc(t.description || "Official ARES COMMUNITY tournament.")}</p><div class="card-meta"><span>PRIZE POOL</span><strong>Rp ${money(t.prize_pool)}</strong></div></a>`).join("") : '<div class="empty-state">Belum ada turnamen. Nantikan pengumuman berikutnya.</div>';
   }
   async function loadTeams() {
-    const { data, error } = await client.from("teams").select("id,name,tag,logo_url,tournaments(name)").order("created_at",{ascending:false}).limit(50);
+    const { data: all, error } = await client.from("teams").select("id,name,tag,logo_url,tournaments(name,is_hidden)").order("created_at",{ascending:false}).limit(50);
     if (error) return empty($("team-list"), "Data tim belum tersedia.");
+    const data = window.ARES.admin.on ? all : all.filter(t => !t.tournaments?.is_hidden);
     if ($("stat-teams")) $("stat-teams").textContent = data.length;
     const card = (t) => `<article class="team-card" data-team="${t.id}" style="cursor:pointer"><div class="team-emblem">${t.logo_url ? `<img src="${esc(t.logo_url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : esc((t.name || "A").slice(0,2).toUpperCase())}</div><div><h3>${esc(t.name)}</h3><p class="slogan">${esc(t.tag || "ARES CONTENDER")}</p></div></article>`;
     const groups = {};
@@ -50,10 +52,10 @@
     if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · M${m._no} · ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan untuk turnamen ini.</div>';
   }
   async function loadMatches() {
-    const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,stage,group_name,best_of,tournaments(name,status),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
+    const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,stage,group_name,best_of,tournaments(name,status,is_hidden),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
     if (error) return empty($("match-list"), "Match center belum tersedia.");
     const A = window.ARES; A.annotate(data, m => m.tournaments?.status);
-    matchAll = data.filter(m => !m.is_bye && m.team1 && m.team2);
+    matchAll = data.filter(m => !m.is_bye && m.team1 && m.team2 && (A.admin.on || !m.tournaments?.is_hidden));
     if (selTid && !matchAll.some(m => m.tournament_id === selTid)) selTid = "";
     renderMatchFilter(); renderMatchList();
   }
@@ -66,5 +68,6 @@
   const home = !!$("stat-tournaments");
   async function refresh(){ await Promise.all([(home||$("tournament-list"))&&loadTournaments(),(home||$("team-list"))&&loadTeams(),(home||$("match-list"))&&loadMatches()]); }
   refresh();
+  window.addEventListener("ares-admin", refresh);
   client.channel("ares-public-updates").on("postgres_changes",{event:"*",schema:"public",table:"tournaments"},refresh).on("postgres_changes",{event:"*",schema:"public",table:"teams"},refresh).on("postgres_changes",{event:"*",schema:"public",table:"matches"},refresh).subscribe();
 })();

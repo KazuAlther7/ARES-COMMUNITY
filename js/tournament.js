@@ -88,7 +88,7 @@
         return spBox(ms[0].round_name || ("Round " + r), ms);
       }).join("");
     }
-    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">ADMIN ONLY</div><h2>SET SCORES<span>.</span></h2></div></div>${genBar}${boxes ? `<div class="sp-grid">${boxes}</div>` : '<p class="hint">Belum ada match playoff — generate dulu dari klasemen grup.</p>'}`;
+    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">ADMIN ONLY</div><h2>SET SCORES<span>.</span></h2></div>${boxes ? '<button type="button" class="btn-primary" id="saveall">SAVE ALL</button>' : ""}</div>${genBar}${boxes ? `<div class="sp-grid">${boxes}</div>` : '<p class="hint">Belum ada match playoff — generate dulu dari klasemen grup.</p>'}`;
     el.hidden = false;
   }
   async function load() {
@@ -142,6 +142,20 @@
     const title = document.title, txt = "Bracket & skor live — ARES COMMUNITY";
     if (b.dataset.share === "native" && navigator.share) { try { await navigator.share({ title, text: txt, url: shareUrl }); } catch {} return; }
     try { await navigator.clipboard.writeText(shareUrl); const o = b.textContent; b.textContent = "COPIED ✓"; setTimeout(() => b.textContent = o, 1800); } catch { prompt("Salin link:", shareUrl); }
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("#saveall"); if (!b) return;
+    const rows = [...document.querySelectorAll("#t-scorepanel [data-mid]")];
+    b.disabled = true; b.textContent = `SAVING 0/${rows.length}…`;
+    let i = 0, fail = [];
+    for (const box of rows) {
+      i++; b.textContent = `SAVING ${i}/${rows.length}…`;
+      const m = (window.__ms || []).find(x => x.id === box.dataset.mid);
+      const [s1, s2] = box.querySelector('[name=sc]').value.split("-").map(Number);
+      try { await window.ARES.saveMatchResult(m, s1, s2); } catch (err) { fail.push((m?._no ? "M" + m._no : "?") + ": " + (err.message || err)); }
+    }
+    if (fail.length) alert("Sebagian gagal tersimpan:\n" + fail.join("\n"));
+    load();
   });
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("#genplayoffs"); if (!b) return;
