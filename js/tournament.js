@@ -41,7 +41,7 @@
         ? `<tr class="${cls}"><td>${i + 1}</td>${name}<td><b>${r.W}</b></td><td>${r.W}-${r.L}</td><td>${r.GD > 0 ? "+" : ""}${r.GD}</td><td>${r.GF}-${r.GA}</td></tr>`
         : `<tr class="${cls}"><td>${i + 1}</td>${name}<td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.GF}</td><td>${r.GA}</td><td>${r.GD > 0 ? "+" : ""}${r.GD}</td><td><b>${r.Pts}</b></td></tr>`;
     };
-    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">${isRR ? "LEAGUE TABLE" : "GROUP STAGE"}</div><h2>${isRR ? "STANDINGS" : "GROUPS"}<span>.</span></h2></div>${mode === "mlbb" ? '<span class="mode-pill">MLBB STANDINGS</span>' : ""}</div>` +
+    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">${isRR ? "LEAGUE TABLE" : "GROUP STAGE"}</div><h2>${isRR ? "STANDINGS" : "GROUPS"}<span>.</span></h2></div>${mode === "mlbb" ? '<span class="mode-pill">MLBB STANDINGS</span>' : ""}<button type="button" class="text-link" data-export="t-league">EXPORT PNG <b>↓</b></button></div>` +
       Object.keys(groups).sort().map(g => {
         const gm = groups[g].sort((a, b) => a.round - b.round || a.position - b.position);
         const ids = [...new Set(gm.flatMap(m => [m.team1_id, m.team2_id]).filter(Boolean))];
@@ -163,6 +163,16 @@
     try { b.disabled = true; const r = await window.ARES.generatePlayoffs((window.__t || {}).id, k); if (r) load(); }
     catch (err) { alert(err.message || err); }
     finally { if (b.isConnected) b.disabled = false; }
+  });
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-export]"); if (!b) return;
+    const target = document.getElementById(b.dataset.export); if (!target || !window.html2canvas) return alert("Export belum siap, coba lagi.");
+    const old = b.textContent; b.textContent = "RENDERING…"; b.disabled = true;
+    try {
+      const canvas = await html2canvas(target, { backgroundColor: "#0b0c0e", scale: 2, ignoreElements: (x) => x.hasAttribute("data-export") });
+      const a = document.createElement("a"); a.download = `${(window.__t?.name || "ares").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${b.dataset.export}.png`; a.href = canvas.toDataURL("image/png"); a.click();
+    } catch (err) { alert("Gagal export: " + (err.message || err)); }
+    finally { b.textContent = old; b.disabled = false; }
   });
   window.addEventListener("ares-admin", load);
   document.addEventListener("click", async (e) => {
