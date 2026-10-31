@@ -24,6 +24,12 @@ Starter foundation for ARES MLBB Tournament Hub.
 Admin dashboard, tournament CRUD, roster editor, bracket generation, score editor, and advanced tournament formats are the next implementation phase.
 
 
+## Migrasi: mode klasemen (Normal / MLBB)
+Jalankan sekali di Supabase SQL Editor (kalau kolom belum ada):
+```sql
+alter table tournaments add column if not exists standings_mode text not null default 'normal';
+```
+
 ## Folder convention
 - `assets/` — logo, banner, ikon, dan gambar.
 - `css/` — stylesheet.
