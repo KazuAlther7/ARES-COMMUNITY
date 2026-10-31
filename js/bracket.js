@@ -71,7 +71,8 @@
     return ms;
   }
   // Klasemen ala sepak bola: menang 3, seri 1, kalah 0. Urut: Pts → selisih gol (GD) → gol masuk (GF) → nama.
-  function standings(teams, matches) {
+  // mode "mlbb" (ala MPL ID): tanpa sistem poin 3-1-0 — urut jumlah match menang (W) → Net Game Win (GD) → Game menang (GF) → nama.
+  function standings(teams, matches, mode) {
     const t = {}; teams.forEach(x => t[x.id] = { team: x, P: 0, W: 0, D: 0, L: 0, GF: 0, GA: 0, GD: 0, Pts: 0 });
     matches.filter(m => (m._st || m.status) === "completed" && t[m.team1_id] && t[m.team2_id]).forEach(m => {
       const a = t[m.team1_id], b = t[m.team2_id], s1 = +m.score1 || 0, s2 = +m.score2 || 0;
@@ -79,7 +80,9 @@
       if (s1 > s2) { a.W++; b.L++; a.Pts += 3; } else if (s2 > s1) { b.W++; a.L++; b.Pts += 3; } else { a.D++; b.D++; a.Pts++; b.Pts++; }
     });
     const rows = Object.values(t); rows.forEach(r => r.GD = r.GF - r.GA);
-    return rows.sort((x, y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || String(x.team.name || "").localeCompare(String(y.team.name || "")));
+    return mode === "mlbb"
+      ? rows.sort((x, y) => y.W - x.W || y.GD - x.GD || y.GF - x.GF || String(x.team.name || "").localeCompare(String(y.team.name || "")))
+      : rows.sort((x, y) => y.Pts - x.Pts || y.GD - x.GD || y.GF - x.GF || String(x.team.name || "").localeCompare(String(y.team.name || "")));
   }
   // Round robin (circle method): array of rounds, tiap round = [[a,b],...]
   function roundRobin(ids) {

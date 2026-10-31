@@ -28,15 +28,41 @@
     data.forEach(t => (groups[t.tournaments?.name || "Belum masuk turnamen"] ||= []).push(t));
     if ($("team-list")) $("team-list").innerHTML = data.length ? Object.entries(groups).map(([n, ts]) => `<div class="group-title">${esc(n)} <small>${ts.length} TEAMS</small></div>${ts.map(card).join("")}`).join("") : '<div class="empty-state">Belum ada tim terdaftar.</div>';
   }
+  let matchAll = [], selTid = new URLSearchParams(location.search).get("t") || "";
+  function renderMatchFilter() {
+    const box = $("t-filter"); if (!box) return;
+    const counts = {}, liveCounts = {}, names = {};
+    matchAll.forEach(m => {
+      counts[m.tournament_id] = (counts[m.tournament_id] || 0) + 1;
+      if (m._st === "live") liveCounts[m.tournament_id] = (liveCounts[m.tournament_id] || 0) + 1;
+      names[m.tournament_id] = m.tournaments?.name || "Turnamen";
+    });
+    const ids = Object.keys(counts);
+    if (!ids.length) { box.innerHTML = ""; return; }
+    const pill = (tid, label, n, live) => `<button type="button" class="t-pill ${selTid === tid ? "active" : ""}" data-tid="${tid}">${esc(label)}${live ? '<i class="live-dot"></i>' : ""}<span>${n}</span></button>`;
+    box.innerHTML = pill("", "SEMUA TURNAMEN", matchAll.length, matchAll.some(m => m._st === "live")) +
+      ids.map(tid => pill(tid, names[tid], counts[tid], !!liveCounts[tid])).join("");
+  }
+  function renderMatchList() {
+    const A = window.ARES, rank = { live: 0, scheduled: 1, completed: 2 };
+    const list = (selTid ? matchAll.filter(m => m.tournament_id === selTid) : matchAll).sort((a, b) => rank[a._st] - rank[b._st] || a._no - b._no);
+    if ($("stat-live")) $("stat-live").textContent = matchAll.filter(m => m._st === "live").length;
+    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · M${m._no} · ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan untuk turnamen ini.</div>';
+  }
   async function loadMatches() {
     const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,stage,group_name,best_of,tournaments(name,status),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
     if (error) return empty($("match-list"), "Match center belum tersedia.");
     const A = window.ARES; A.annotate(data, m => m.tournaments?.status);
-    const rank = { live: 0, scheduled: 1, completed: 2 };
-    const list = data.filter(m => !m.is_bye && m.team1 && m.team2).sort((a, b) => rank[a._st] - rank[b._st] || a._no - b._no);
-    if ($("stat-live")) $("stat-live").textContent = list.filter(m => m._st === "live").length;
-    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · M${m._no} · ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan. Jadwal akan ditampilkan di sini.</div>';
+    matchAll = data.filter(m => !m.is_bye && m.team1 && m.team2);
+    if (selTid && !matchAll.some(m => m.tournament_id === selTid)) selTid = "";
+    renderMatchFilter(); renderMatchList();
   }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".t-pill"); if (!b || !$("t-filter")) return;
+    selTid = b.dataset.tid || "";
+    history.replaceState(null, "", "matches.html" + (selTid ? "?t=" + selTid : ""));
+    renderMatchFilter(); renderMatchList();
+  });
   const home = !!$("stat-tournaments");
   async function refresh(){ await Promise.all([(home||$("tournament-list"))&&loadTournaments(),(home||$("team-list"))&&loadTeams(),(home||$("match-list"))&&loadMatches()]); }
   refresh();
