@@ -60,12 +60,14 @@
       const ko = list.filter(isKO).sort((a, b) => a.round - b.round || a.position - b.position);
       const lg = list.filter(m => !isKO(m)).sort((a, b) => a.round - b.round || (a.group_name || "").localeCompare(b.group_name || "") || a.position - b.position);
       const maxR = ko.length ? Math.max(...ko.map(m => m.round)) : 0; let n = 0;
+      const now = Date.now();
       [...lg, ...ko].forEach(m => {
         m._ko = isKO(m); m._maxR = maxR;
         m._bo = m._ko ? bestOf(m.round, maxR) : (m.best_of || 1);
         m._no = m.is_bye ? null : ++n;
         const ts = typeof tstat === "function" ? tstat(m) : tstat;
-        m._st = (m.status === "completed" || m.winner_id) ? "completed" : (ts === "live" && m.team1_id && m.team2_id ? "live" : "scheduled");
+        const timeLive = m.scheduled_at && new Date(m.scheduled_at).getTime() <= now; // sudah lewat jam jadwal
+        m._st = (m.status === "completed" || m.winner_id) ? "completed" : (m.team1_id && m.team2_id && (ts === "live" || timeLive) ? "live" : "scheduled");
       });
     });
     return ms;

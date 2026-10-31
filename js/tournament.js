@@ -6,6 +6,8 @@
 
   const slot = (t, score, win, bye) => `<div class="slot ${win ? "win" : ""} ${t ? "" : "tbd"}" ${t ? `data-team="${t.id}"` : ""}>${t ? logo(t) : '<span class="team-emblem">?</span>'}<span class="slot-name">${t ? esc(t.name) : (bye ? "BYE" : "TBD")}</span><b>${t ? Number(score || 0) : ""}</b></div>`;
 
+  const dtLocal = (s) => { if (!s) return ""; const d = new Date(s); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+  const fromLocal = (s) => s ? new Date(s).toISOString() : null;
   const shareUrl = location.origin + location.pathname + "?id=" + id;
   const TROPHY = '<svg class="trophy" viewBox="0 0 64 64" width="64" height="64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8h24v14a12 12 0 01-24 0V8z" fill="currentColor" fill-opacity=".18"/><path d="M20 12h-8v4a8 8 0 008 8M44 12h8v4a8 8 0 01-8 8M32 34v10M22 56h20M26 44h12v12H26z"/></svg>';
   const champCol = (fin) => {
@@ -41,7 +43,7 @@
         ? `<tr class="${cls}"><td>${i + 1}</td>${name}<td><b>${r.W}</b></td><td>${r.W}-${r.L}</td><td>${r.GD > 0 ? "+" : ""}${r.GD}</td><td>${r.GF}-${r.GA}</td></tr>`
         : `<tr class="${cls}"><td>${i + 1}</td>${name}<td>${r.P}</td><td>${r.W}</td><td>${r.D}</td><td>${r.L}</td><td>${r.GF}</td><td>${r.GA}</td><td>${r.GD > 0 ? "+" : ""}${r.GD}</td><td><b>${r.Pts}</b></td></tr>`;
     };
-    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">${isRR ? "LEAGUE TABLE" : "GROUP STAGE"}</div><h2>${isRR ? "STANDINGS" : "GROUPS"}<span>.</span></h2></div>${mode === "mlbb" ? '<span class="mode-pill">MLBB STANDINGS</span>' : ""}<button type="button" class="text-link" data-export="t-league">EXPORT PNG <b>↓</b></button></div>` +
+    el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">${isRR ? "LEAGUE TABLE" : "GROUP STAGE"}</div><h2>${isRR ? "STANDINGS" : "GROUPS"}<span>.</span></h2></div>${mode === "mlbb" ? '<span class="mode-pill">MLBB STANDINGS</span>' : ""}<button type="button" class="export-btn" data-export="t-league"><svg viewBox="0 0 24 24" width="13" height="13"><path fill="currentColor" d="M12 3v10.6l3.3-3.3 1.4 1.4L12 17 7.3 11.7l1.4-1.4L12 13.6V3zM5 19h14v2H5z"/></svg>EXPORT PNG</button></div>` +
       Object.keys(groups).sort().map(g => {
         const gm = groups[g].sort((a, b) => a.round - b.round || a.position - b.position);
         const ids = [...new Set(gm.flatMap(m => [m.team1_id, m.team2_id]).filter(Boolean))];
@@ -52,7 +54,7 @@
     el.hidden = false;
   }
   // ----- panel admin: set skor, padat per matchday/round — hanya utk format ber-klasemen grup -----
-  const spRow = (m) => `<div class="sp-row ${m._st === "live" ? "is-live" : ""}" data-mid="${m.id}"><span class="sp-no">M${m._no}</span><span class="sp-t" data-team="${m.team1_id}">${esc(m.team1?.name || "TBD")}</span><select name="sc">${window.ARES.scoreOpts(m)}</select><span class="sp-t r" data-team="${m.team2_id}">${esc(m.team2?.name || "TBD")}</span><button type="button" data-msave>SAVE</button></div>`;
+  const spRow = (m) => `<div class="sp-row ${m._st === "live" ? "is-live" : ""}" data-mid="${m.id}"><span class="sp-no">M${m._no}</span><span class="sp-t" data-team="${m.team1_id}">${esc(m.team1?.name || "TBD")}</span><select name="sc">${window.ARES.scoreOpts(m)}</select><span class="sp-t r" data-team="${m.team2_id}">${esc(m.team2?.name || "TBD")}</span><input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}" title="Jadwal — sinkron ke Live Matches"><button type="button" data-msave>SAVE</button></div>`;
   const spBox = (label, ms) => `<div class="sp-box"><div class="sp-box-h">${esc(label)}</div>${ms.map(spRow).join("")}</div>`;
   function renderScorePanel(t, allMs) {
     const el = $("t-scorepanel");
@@ -124,7 +126,7 @@
     $("bracket").className = "bracket" + (!useScorePanel && A.admin.on ? " adm" : "");
     $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "to-champ" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => {
       const w = m.winner_id, canEdit = !useScorePanel && A.admin.on && m.team1_id && m.team2_id && !m.is_bye;
-      return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "MATCH " + m._no}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${canEdit ? `<div class="b-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
+      return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "MATCH " + m._no}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${canEdit ? `<div class="b-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}" title="Jadwal — sinkron ke Live Matches"><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
     }).join("")}</div></div>`).join("") + champCol(rounds[last][0]) : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
 
     $("t-info").innerHTML = `${t.description ? `<div class="eyebrow">ABOUT</div><p class="prose">${esc(t.description)}</p>` : ""}
@@ -132,6 +134,7 @@
       ${(teams || []).length ? `<div class="eyebrow" style="margin-top:28px">PARTICIPATING TEAMS</div><div class="team-grid">${teams.map(x => `<article class="team-card" data-team="${x.id}" style="cursor:pointer">${logo(x, "lg")}<div><h3>${esc(x.name)}</h3><p>${esc(x.tag || "")}</p></div></article>`).join("")}</div>` : ""}`;
   }
   load();
+  setInterval(load, 30000);
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-reset]"); if (!b) return; e.preventDefault();
     if (!confirm("Reset SEMUA skor turnamen ini? Skor, pemenang, dan juara dihapus (bracket awal tetap).")) return;
@@ -152,7 +155,8 @@
       i++; b.textContent = `SAVING ${i}/${rows.length}…`;
       const m = (window.__ms || []).find(x => x.id === box.dataset.mid);
       const [s1, s2] = box.querySelector('[name=sc]').value.split("-").map(Number);
-      try { await window.ARES.saveMatchResult(m, s1, s2); } catch (err) { fail.push((m?._no ? "M" + m._no : "?") + ": " + (err.message || err)); }
+      const whenEl = box.querySelector('[name=when]');
+      try { await window.ARES.saveMatchResult(m, s1, s2, whenEl ? fromLocal(whenEl.value) : undefined); } catch (err) { fail.push((m?._no ? "M" + m._no : "?") + ": " + (err.message || err)); }
     }
     if (fail.length) alert("Sebagian gagal tersimpan:\n" + fail.join("\n"));
     load();
@@ -167,18 +171,18 @@
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-export]"); if (!b) return;
     const target = document.getElementById(b.dataset.export); if (!target || !window.html2canvas) return alert("Export belum siap, coba lagi.");
-    const old = b.textContent; b.textContent = "RENDERING…"; b.disabled = true;
+    const old = b.innerHTML; b.innerHTML = "RENDERING…"; b.disabled = true;
     try {
-      const canvas = await html2canvas(target, { backgroundColor: "#0b0c0e", scale: 2, ignoreElements: (x) => x.hasAttribute("data-export") });
+      const canvas = await html2canvas(target, { backgroundColor: "#0b0c0e", scale: 2, useCORS: true, allowTaint: true, ignoreElements: (x) => x.hasAttribute("data-export") });
       const a = document.createElement("a"); a.download = `${(window.__t?.name || "ares").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${b.dataset.export}.png`; a.href = canvas.toDataURL("image/png"); a.click();
     } catch (err) { alert("Gagal export: " + (err.message || err)); }
-    finally { b.textContent = old; b.disabled = false; }
+    finally { b.innerHTML = old; b.disabled = false; }
   });
   window.addEventListener("ares-admin", load);
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-msave]"); if (!b) return;
-    const box = b.closest("[data-mid]"), m = (window.__ms || []).find(x => x.id === box.dataset.mid), q = (n) => box.querySelector(`[name=${n}]`).value;
-    try { b.disabled = true; const [s1, s2] = q("sc").split("-").map(Number); await window.ARES.saveMatchResult(m, s1, s2); load(); }
+    const box = b.closest("[data-mid]"), m = (window.__ms || []).find(x => x.id === box.dataset.mid), q = (n) => box.querySelector(`[name=${n}]`)?.value;
+    try { b.disabled = true; const [s1, s2] = q("sc").split("-").map(Number); await window.ARES.saveMatchResult(m, s1, s2, q("when") !== undefined ? fromLocal(q("when")) : undefined); load(); }
     catch (err) { alert(err.message || err); b.disabled = false; }
   });
   client.channel("ares-t-" + id)

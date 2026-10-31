@@ -10,7 +10,7 @@
   const ROLES = { "EXP": "exp", "Gold": "gold", "Mid": "mid", "Jungler": "jungler", "Roamer": "roamer" };
   const roleIcon = (role, size = 22) => ROLES[role] ? `<img class="role-ico" src="assets/roles/${ROLES[role]}.png" width="${size}" height="${size}" alt="${esc(role)}">` : "";
   const logo = (t, cls = "") => t?.logo_url
-    ? `<span class="team-emblem ${cls}"><img src="${esc(t.logo_url)}" alt=""></span>`
+    ? `<span class="team-emblem ${cls}"><img src="${esc(t.logo_url)}" alt="" crossorigin="anonymous"></span>`
     : `<span class="team-emblem ${cls}">${esc((t?.name || "?").slice(0, 2).toUpperCase())}</span>`;
 
   // Kecilkan gambar besar (foto HP) sebelum upload agar cepat.

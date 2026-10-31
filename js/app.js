@@ -50,7 +50,8 @@
     const list = (selTid ? matchAll.filter(m => m.tournament_id === selTid) : matchAll).sort((a, b) => rank[a._st] - rank[b._st] || a._no - b._no);
     if ($("stat-live")) $("stat-live").textContent = matchAll.filter(m => m._st === "live").length;
     const when = (m) => m.scheduled_at ? new Date(m.scheduled_at).toLocaleString("id-ID", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : (m._st === "scheduled" ? "Jadwal belum ditentukan" : "");
-    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · M${m._no} · ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small class="match-when">🕒 ${esc(when(m))}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan untuk turnamen ini.</div>';
+    const dot = (st) => `<i class="status-dot st-${st}"></i>`;
+    if ($("match-list")) $("match-list").innerHTML = list.length ? list.map(m => `<a class="match-card" href="tournament.html?id=${m.tournament_id}"><div class="match-team">${A.logo(m.team1)}${esc(m.team1.name)}</div><div class="score">${Number(m.score1 || 0)} : ${Number(m.score2 || 0)}<small>${esc(m._st.toUpperCase())} · M${m._no} · ${esc(m.round_name || "MATCH")} · BO${m._bo}</small><small class="match-when">${dot(m._st)}${esc(when(m))}</small><small>${esc(m.tournaments?.name || "")}</small></div><div class="match-team"><span>${esc(m.team2.name)}</span>${A.logo(m.team2)}</div></a>`).join("") : '<div class="empty-state">Belum ada pertandingan untuk turnamen ini.</div>';
   }
   async function loadMatches() {
     const { data, error } = await client.from("matches").select("id,tournament_id,round,position,round_name,status,winner_id,is_bye,scheduled_at,score1,score2,team1_id,team2_id,stage,group_name,best_of,tournaments(name,status,is_hidden),team1:teams!matches_team1_id_fkey(id,name,tag,logo_url),team2:teams!matches_team2_id_fkey(id,name,tag,logo_url)").order("round").order("position").limit(300);
@@ -70,5 +71,6 @@
   async function refresh(){ await Promise.all([(home||$("tournament-list"))&&loadTournaments(),(home||$("team-list"))&&loadTeams(),(home||$("match-list"))&&loadMatches()]); }
   refresh();
   window.addEventListener("ares-admin", refresh);
+  setInterval(() => { if (home || $("match-list")) loadMatches(); }, 30000);
   client.channel("ares-public-updates").on("postgres_changes",{event:"*",schema:"public",table:"tournaments"},refresh).on("postgres_changes",{event:"*",schema:"public",table:"teams"},refresh).on("postgres_changes",{event:"*",schema:"public",table:"matches"},refresh).subscribe();
 })();
