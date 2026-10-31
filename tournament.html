@@ -9,15 +9,15 @@
   <meta property="og:description" content="Bracket, skor live, dan roster tim turnamen Mobile Legends.">
   <meta property="og:image" content="https://kazualther7.github.io/ARES-COMMUNITY/assets/icon-maskable-512.png">
   <meta property="og:type" content="website">
-  <link rel="icon" type="image/x-icon" href="assets/favicon.ico?v=9">
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=9">
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png?v=9">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=9">
-  <link rel="manifest" href="manifest.webmanifest?v=9">
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico?v=10">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=10">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png?v=10">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=10">
+  <link rel="manifest" href="manifest.webmanifest?v=10">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=9">
+  <link rel="stylesheet" href="css/style.css?v=10">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -32,14 +32,15 @@
       <a class="text-link" href="tournaments.html">← ALL TOURNAMENTS</a>
       <div id="t-head" style="margin-top:22px"><div class="empty-state">Loading tournament<span class="loader"></span></div></div>
     </section>
-    <section class="section" style="padding-top:40px">
-      <div class="section-heading"><div><div class="eyebrow">THE PATH TO GLORY</div><h2>BRACKET<span>.</span></h2></div><span class="live-pill" id="t-live"></span></div>
+    <section class="section" id="t-league" style="padding-top:40px" hidden></section>
+    <section class="section" id="t-bracket-sec" style="padding-top:40px">
+      <div class="section-heading"><div><div class="eyebrow">THE PATH TO GLORY</div><h2 id="t-bracket-h">BRACKET<span>.</span></h2></div><span class="live-pill" id="t-live"></span></div>
       <div class="bracket-wrap"><div class="bracket" id="bracket"></div></div>
       <p class="hint">Klik nama tim untuk melihat roster.</p>
     </section>
     <section class="section" style="padding-top:40px" id="t-info"></section>
   </main>
   <footer><a class="brand" href="index.html"><img class="brand-logo" src="assets/ares-logo.png" alt="ARES"><span>ARES <b>COMMUNITY</b><small>ESPORTS TOURNAMENT HUB</small></span></a><p>Built for the competitors. Powered by the community.</p><span>© 2026 ARES COMMUNITY</span></footer>
-  <script src="js/config.js?v=9"></script><script src="js/bracket.js?v=9"></script><script src="js/common.js?v=9"></script><script src="js/admin-mode.js?v=9"></script><script src="js/tournament.js?v=9"></script>
+  <script src="js/config.js?v=10"></script><script src="js/bracket.js?v=10"></script><script src="js/common.js?v=10"></script><script src="js/admin-mode.js?v=10"></script><script src="js/tournament.js?v=10"></script>
 </body>
 </html>
