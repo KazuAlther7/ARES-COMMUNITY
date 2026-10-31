@@ -132,3 +132,27 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 .fx-s{text-align:center;font:900 22px 'Barlow Condensed';letter-spacing:2px}.fx-s small{display:block;font:700 8px Inter;letter-spacing:1.2px;color:#777}
 .fx-edit{grid-column:1/-1;margin:2px -14px -10px;border-top:1px dashed var(--red)}
 @media(max-width:600px){.fx{grid-template-columns:34px 1fr 84px 1fr;padding:10px 8px}.fx-t span{font-size:11px}}
+
+/* MLBB standings pill */
+.mode-pill{align-self:center;font:800 9px Inter;letter-spacing:1.4px;color:var(--gold);border:1px solid #57452d;padding:7px 11px;background:#1c1810}
+
+/* panel admin: set scores, padat (3-4 matchday per baris) */
+#t-scorepanel{border:1px solid var(--red);background:#120d0e}
+.sp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:10px}
+.sp-box{background:#141619;border:1px solid var(--line);padding:9px}
+.sp-box-h{font:800 9px Inter;letter-spacing:1.2px;color:var(--gold);text-transform:uppercase;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.sp-row{display:grid;grid-template-columns:22px 1fr 56px 1fr auto;gap:5px;align-items:center;padding:4px 0}
+.sp-row+.sp-row{border-top:1px solid #23262a}
+.sp-no{font:800 8px Inter;color:#777}
+.sp-t{font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-t.r{text-align:right}
+.sp-row select{width:100%;padding:4px 2px;background:#0c0e10;border:1px solid #34383c;color:#fff;font-size:10px}
+.sp-row button{background:var(--red);color:#fff;border:0;padding:5px 7px;font:800 8px Inter;cursor:pointer;white-space:nowrap}
+.sp-row.is-live{box-shadow:inset 2px 0 0 var(--red)}
+@media(max-width:600px){.sp-grid{grid-template-columns:1fr 1fr}}
+
+/* filter turnamen di Live Matches, ala pilihan menu Teams */
+.t-filter{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.t-pill{display:inline-flex;align-items:center;gap:7px;background:#141619;border:1px solid var(--line);color:#ccc;padding:9px 14px;font:800 10px Inter;letter-spacing:.8px;cursor:pointer}
+.t-pill span{color:#777;font-size:9px}
+.t-pill.active{border-color:var(--gold);color:var(--gold);background:#1c1810}
+.t-filter-hint{color:#777;font-size:11px;margin-bottom:14px}
