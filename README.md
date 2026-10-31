@@ -29,6 +29,7 @@ Jalankan sekali di Supabase SQL Editor (kalau kolom belum ada):
 ```sql
 alter table tournaments add column if not exists standings_mode text not null default 'normal';
 alter table tournaments add column if not exists qualify_count integer;
+alter table tournaments add column if not exists is_hidden boolean not null default false;
 ```
 
 ## Folder convention
