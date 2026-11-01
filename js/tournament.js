@@ -172,11 +172,22 @@
     const b = e.target.closest("[data-export]"); if (!b) return;
     const target = document.getElementById(b.dataset.export); if (!target || !window.html2canvas) return alert("Export belum siap, coba lagi.");
     const old = b.innerHTML; b.innerHTML = "RENDERING…"; b.disabled = true;
+    const imgs = [...target.querySelectorAll("img")], restore = [];
     try {
-      const canvas = await html2canvas(target, { backgroundColor: "#0b0c0e", scale: 2, useCORS: true, allowTaint: true, ignoreElements: (x) => x.hasAttribute("data-export") });
+      // Fetch tiap logo jadi data-URL dulu — <img> biasa (tanpa crossorigin) gak bisa dibaca langsung oleh canvas.
+      await Promise.all(imgs.map(async (img) => {
+        const src = img.src; if (!src || src.startsWith("data:")) return;
+        try {
+          const res = await fetch(src, { mode: "cors", cache: "force-cache" });
+          const blob = await res.blob();
+          const dataUrl = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
+          restore.push([img, src]); img.src = dataUrl;
+        } catch { /* gagal diambil — biarkan src asli, logo itu mungkin tetap tidak tampil di hasil export */ }
+      }));
+      const canvas = await html2canvas(target, { backgroundColor: "#0b0c0e", scale: 2, useCORS: true, allowTaint: false, ignoreElements: (x) => x.hasAttribute("data-export") });
       const a = document.createElement("a"); a.download = `${(window.__t?.name || "ares").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${b.dataset.export}.png`; a.href = canvas.toDataURL("image/png"); a.click();
     } catch (err) { alert("Gagal export: " + (err.message || err)); }
-    finally { b.innerHTML = old; b.disabled = false; }
+    finally { restore.forEach(([img, src]) => img.src = src); b.innerHTML = old; b.disabled = false; }
   });
   window.addEventListener("ares-admin", load);
   document.addEventListener("click", async (e) => {
