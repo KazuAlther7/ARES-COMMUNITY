@@ -67,7 +67,7 @@
     const B = window.ARES_BRACKET;
     const [{ data: t }, { data: all }] = await Promise.all([
       client.from("tournaments").select("status,format").eq("id", m.tournament_id).single(),
-      client.from("matches").select("id,round,position,stage,team1_id,team2_id,score1,score2,status").eq("tournament_id", m.tournament_id)
+      client.from("matches").select("id,round,position,stage,bracket_side,team1_id,team2_id,score1,score2,status,winner_to,loser_to,best_of").eq("tournament_id", m.tournament_id)
     ]);
     const live = t?.status === "live" ? "live" : "scheduled";
     if (!B.isKO(m)) { // fase liga / grup
@@ -87,26 +87,37 @@
       }
       return { winner, final, done, draw: done && !winner };
     }
-    const ko = all.filter(B.isKO), maxR = Math.max(...ko.map(x => x.round)), bo = B.bestOf(m.round, maxR), wins = Math.ceil(bo / 2);
+    const ko = all.filter(B.isKO), bo = m.best_of || 1, wins = Math.ceil(bo / 2); // best_of udah fixed sejak digenerate (WB final Bo5, LB final Bo3, dst)
     if (s1 > wins || s2 > wins || (s1 === wins && s2 === wins)) throw new Error(`Skor tidak valid untuk Bo${bo}`);
     const done = s1 === wins || s2 === wins;
     const winner = done ? (s1 > s2 ? m.team1_id : m.team2_id) : null;
-    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status: done ? "completed" : live, best_of: bo, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
+    const loser = done ? (winner === m.team1_id ? m.team2_id : m.team1_id) : null;
+    const { error } = await client.from("matches").update({ score1: s1, score2: s2, status: done ? "completed" : live, winner_id: winner, scheduled_at: whenIso ?? m.scheduled_at ?? null }).eq("id", m.id);
     if (error) throw error;
-    if (m.round < maxR) {
-      const nx = ko.find(x => x.round === m.round + 1 && x.position === Math.ceil(m.position / 2));
-      const { error: e2 } = await client.from("matches").update({ [m.position % 2 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2;
-    } else {
-      await client.from("tournaments").update({ champion_id: winner, ...(winner ? { status: "completed" } : {}) }).eq("id", m.tournament_id);
+    let final = false;
+    if (done) {
+      const self = ko.find(x => x.id === m.id); // winner_to/loser_to hasil query sebelum skor ini disimpan
+      const wt = self?.winner_to, lt = self?.loser_to;
+      if (wt) { const nx = ko.find(x => (x.bracket_side || null) === (wt.side || null) && x.round === wt.round && x.position === wt.position); if (nx) { const { error: e2 } = await client.from("matches").update({ [wt.slot === 1 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2; } }
+      else { await client.from("tournaments").update({ champion_id: winner, status: "completed" }).eq("id", m.tournament_id); final = true; }
+      if (lt && loser) { const nx = ko.find(x => (x.bracket_side || null) === (lt.side || null) && x.round === lt.round && x.position === lt.position); if (nx) { const { error: e3 } = await client.from("matches").update({ [lt.slot === 1 ? "team1_id" : "team2_id"]: loser }).eq("id", nx.id); if (e3) throw e3; } }
+      // Double elimination: match BYE di Winners Bracket gak punya "yang kalah", jadi slot Losers Bracket terkait
+      // baru kelihatan lengkap belakangan — cek ulang & auto-selesaikan BYE baru yg baru kebuka.
+      if (ko.some(x => x.bracket_side)) {
+        const { data: fresh } = await client.from("matches").select("id,round,position,bracket_side,team1_id,team2_id,winner_id,is_bye,status,winner_to,loser_to,stage").eq("tournament_id", m.tournament_id);
+        const ko2 = (fresh || []).filter(B.isKO);
+        B.propagateByes(ko2);
+        await Promise.all(ko2.filter(x => x.is_bye && fresh.find(f => f.id === x.id && !f.is_bye)).map(x => client.from("matches").update({ team1_id: x.team1_id, team2_id: x.team2_id, winner_id: x.winner_id, is_bye: true, status: "completed" }).eq("id", x.id)));
+      }
     }
-    return { winner, final: m.round === maxR, done };
+    return { winner, final, done };
   }
-  // Reset semua skor: bracket (seed babak 1 + BYE) dipertahankan, babak berikutnya dikosongkan.
+  // Reset semua skor: seed asli (round 1 Winners/bracket tunggal) dipertahankan, sisanya dikosongkan lalu BYE di-replay via winner_to.
   async function resetScores(tid) {
     const B = window.ARES_BRACKET;
     const [{ data: t0 }, { data: ms0, error }] = await Promise.all([
       client.from("tournaments").select("status,format").eq("id", tid).single(),
-      client.from("matches").select("id,round,position,stage,team1_id,team2_id,is_bye").eq("tournament_id", tid)
+      client.from("matches").select("id,round,position,stage,bracket_side,team1_id,team2_id,winner_to,loser_to").eq("tournament_id", tid)
     ]);
     if (error) throw error; if (!ms0.length) throw new Error("Belum ada match.");
     let ms = ms0;
@@ -115,13 +126,14 @@
       if (po.length) await client.from("matches").delete().in("id", po.map(x => x.id));
       ms = ms.filter(m => m.stage !== "playoff");
     }
-    const st = ms.map(m => ({ id: m.id, round: m.round, position: m.position, ko: B.isKO(m), is_bye: m.is_bye, team1_id: !B.isKO(m) || m.round === 1 ? m.team1_id : null, team2_id: !B.isKO(m) || m.round === 1 ? m.team2_id : null, winner_id: null, status: "scheduled" }));
-    const by = {}; st.filter(m => m.ko).forEach(m => by[m.round + "-" + m.position] = m);
-    st.filter(m => m.ko && m.round === 1 && m.is_bye).forEach(m => {
-      m.winner_id = m.team1_id; m.status = "completed";
-      const nx = by["2-" + Math.ceil(m.position / 2)]; if (nx) nx[m.position % 2 ? "team1_id" : "team2_id"] = m.winner_id;
+    const st = ms.map(m => {
+      const ko = B.isKO(m), isSeedRound = ko && (m.bracket_side === "winners" || !m.bracket_side) && m.round === 1;
+      return { id: m.id, round: m.round, position: m.position, bracket_side: m.bracket_side || null,
+        team1_id: !ko || isSeedRound ? m.team1_id : null, team2_id: !ko || isSeedRound ? m.team2_id : null,
+        winner_id: null, status: "scheduled", is_bye: false, winner_to: m.winner_to, loser_to: m.loser_to };
     });
-    const res = await Promise.all(st.map(m => client.from("matches").update({ team1_id: m.team1_id, team2_id: m.team2_id, score1: 0, score2: 0, winner_id: m.winner_id, status: m.status }).eq("id", m.id)));
+    B.propagateByes(st); // isi ulang BYE yg auto-lanjut (termasuk rantai WB→LB di double elim); match liga/grup otomatis gak kesentuh (winner_to kosong)
+    const res = await Promise.all(st.map(m => client.from("matches").update({ team1_id: m.team1_id, team2_id: m.team2_id, score1: 0, score2: 0, winner_id: m.winner_id, status: m.status, is_bye: m.is_bye }).eq("id", m.id)));
     const bad = res.find(r => r.error); if (bad) throw bad.error;
     await client.from("tournaments").update({ champion_id: null, ...(t0?.status === "completed" ? { status: "upcoming" } : {}) }).eq("id", tid);
     return st.length;

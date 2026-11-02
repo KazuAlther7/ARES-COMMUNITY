@@ -93,6 +93,27 @@
     el.innerHTML = `<div class="section-heading"><div><div class="eyebrow">ADMIN ONLY</div><h2>SET SCORES<span>.</span></h2></div>${boxes ? '<button type="button" class="btn-primary" id="saveall">SAVE ALL</button>' : ""}</div>${genBar}${boxes ? `<div class="sp-grid">${boxes}</div>` : '<p class="hint">Belum ada match playoff — generate dulu dari klasemen grup.</p>'}`;
     el.hidden = false;
   }
+  // Satu kartu match bracket (dipakai single elim, double elim, dan grand final). useScorePanel: true = jangan tampilin edit inline.
+  const bItem = (m, A, useScorePanel) => {
+    const w = m.winner_id, canEdit = !useScorePanel && A.admin.on && m.team1_id && m.team2_id && !m.is_bye;
+    return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "MATCH " + (m._no ?? "")}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${canEdit ? `<div class="b-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}" title="Jadwal — sinkron ke Live Matches"><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
+  };
+  // Double elimination: Winners Bracket + Losers Bracket ditampilkan sebagai dua baris terpisah, lalu Grand Final + Champion.
+  function renderDoubleElim(t, ms, A) {
+    const wb = ms.filter(m => m.bracket_side === "winners").sort((a, b) => a.round - b.round || a.position - b.position);
+    const lb = ms.filter(m => m.bracket_side === "losers").sort((a, b) => a.round - b.round || a.position - b.position);
+    const gf = ms.find(m => m.bracket_side === "final");
+    if (!wb.length) return '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
+    const rowHtml = (list, label) => {
+      const rounds = {}; list.forEach(m => (rounds[m.round] ||= []).push(m));
+      const keys = Object.keys(rounds).sort((a, b) => a - b);
+      return `<div class="eyebrow" style="margin:0 0 10px">${label}</div><div class="bracket${A.admin.on ? " adm" : ""}">${keys.map(r => `<div class="b-round"><div class="b-title">${esc(rounds[r][0].round_name)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => bItem(m, A, false)).join("")}</div></div>`).join("")}</div>`;
+    };
+    let html = `<div class="de-row">${rowHtml(wb, "WINNERS BRACKET")}</div>`;
+    if (lb.length) html += `<div class="de-row" style="margin-top:36px">${rowHtml(lb, "LOSERS BRACKET")}</div>`;
+    if (gf) html += `<div class="de-row" style="margin-top:36px"><div class="eyebrow" style="margin:0 0 10px">GRAND FINAL</div><div class="bracket${A.admin.on ? " adm" : ""}"><div class="b-round"><div class="b-title">Grand Final <small>BO${gf._bo}</small></div><div class="b-matches">${bItem(gf, A, false)}</div></div>${champCol(gf)}</div></div>`;
+    return html;
+  }
   async function load() {
     const [{ data: t, error }, { data: ms }, { data: teams }] = await Promise.all([
       client.from("tournaments").select("*").eq("id", id).single(),
@@ -117,17 +138,20 @@
     const useScorePanel = t.format === "round_robin" || t.format === "group_playoffs";
     renderLeague(t, lg, teams || []);
     renderScorePanel(t, ms || []);
-    $("t-bracket-sec").hidden = !ko.length && t.format !== "single_elimination";
+    const isDE = t.format === "double_elimination";
+    $("t-bracket-sec").hidden = !ko.length && !isDE && t.format !== "single_elimination";
     $("t-bracket-h").innerHTML = (lg.length ? "PLAYOFFS" : "BRACKET") + "<span>.</span>";
-    const rounds = {};
-    ko.forEach(m => (rounds[m.round] ||= []).push(m));
-    const keys = Object.keys(rounds).sort((a, b) => a - b), last = keys[keys.length - 1];
     $("t-live").textContent = (ms || []).some(m => m._st === "live") ? "● LIVE NOW" : "";
-    $("bracket").className = "bracket" + (!useScorePanel && A.admin.on ? " adm" : "");
-    $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "to-champ" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => {
-      const w = m.winner_id, canEdit = !useScorePanel && A.admin.on && m.team1_id && m.team2_id && !m.is_bye;
-      return `<div class="b-item"><div class="b-match ${m._st === "live" ? "is-live" : ""}"><div class="b-head"><span>${m.is_bye ? "BYE" : "MATCH " + m._no}</span><span>${m.is_bye ? "" : "BO" + m._bo}</span></div>${slot(m.team1, m.score1, w && w === m.team1_id)}${slot(m.team2, m.score2, w && w === m.team2_id, m.is_bye)}${canEdit ? `<div class="b-edit" data-mid="${m.id}"><select name="sc">${A.scoreOpts(m)}</select><input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}" title="Jadwal — sinkron ke Live Matches"><button type="button" data-msave>SAVE</button></div>` : ""}<div class="b-foot">${m._st === "live" ? '<i class="live-dot"></i>LIVE' : m._st.toUpperCase()}${m.scheduled_at ? " · " + new Date(m.scheduled_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" }) : ""}</div></div></div>`;
-    }).join("")}</div></div>`).join("") + champCol(rounds[last][0]) : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
+    if (isDE) {
+      $("bracket").className = "de-wrap";
+      $("bracket").innerHTML = renderDoubleElim(t, ko, A);
+    } else {
+      const rounds = {};
+      ko.forEach(m => (rounds[m.round] ||= []).push(m));
+      const keys = Object.keys(rounds).sort((a, b) => a - b), last = keys[keys.length - 1];
+      $("bracket").className = "bracket" + (!useScorePanel && A.admin.on ? " adm" : "");
+      $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "to-champ" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => bItem(m, A, useScorePanel)).join("")}</div></div>`).join("") + champCol(rounds[last][0]) : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
+    }
 
     $("t-info").innerHTML = `${t.description ? `<div class="eyebrow">ABOUT</div><p class="prose">${esc(t.description)}</p>` : ""}
       ${t.rules ? `<div class="eyebrow" style="margin-top:28px">RULES</div><p class="prose" style="white-space:pre-line">${esc(t.rules)}</p>` : ""}

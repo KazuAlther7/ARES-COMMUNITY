@@ -2,7 +2,7 @@
   const { client: sb, esc, uploadImage } = window.ARES;
   const $ = (id) => document.getElementById(id);
   const ROLE_LIST = ["EXP", "Gold", "Mid", "Jungler", "Roamer"];
-  const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination (bracket otomatis belum tersedia)", round_robin: "Round Robin (klasemen liga)", group_playoffs: "Group Stage + Playoffs" };
+  const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination", round_robin: "Round Robin (klasemen liga)", group_playoffs: "Group Stage + Playoffs" };
   let tab = "tournaments", tournaments = [], selT = "";
 
   const fmtErr = (e) => [e?.message, e?.details, e?.hint, e?.code && `(${e.code})`].filter(Boolean).join(" — ") || String(e);
@@ -99,23 +99,25 @@
 
   async function generateBracket(t) {
     const B = ARES_BRACKET;
-    if (t.format === "double_elimination") throw new Error("Double Elimination belum tersedia.");
     const { data: teams } = await sb.from("teams").select("id").eq("tournament_id", t.id).order("created_at");
-    const min = t.format === "group_playoffs" ? 4 : 2;
+    const min = t.format === "group_playoffs" ? 4 : t.format === "double_elimination" ? 4 : 2;
     if (!teams || teams.length < min) throw new Error(`Minimal ${min} tim harus terdaftar di turnamen ini (menu Teams).`);
     const { count } = await sb.from("matches").select("id", { count: "exact", head: true }).eq("tournament_id", t.id);
     if (count && !confirm("Jadwal/bracket sudah ada. Generate ulang akan menghapus semua match & skor. Lanjut?")) return;
-    let bo = 1;
-    if (t.format !== "single_elimination") { bo = +prompt("Best of untuk fase liga/grup (1, 2, atau 3)?\nBo2: seri 1:1 boleh (1 poin).", "2"); if (![1, 2, 3].includes(bo)) throw new Error("Best of harus 1, 2, atau 3."); }
     const shuffle = confirm(`${teams.length} tim. OK = acak seed/undian, Cancel = urut pendaftaran.`);
     const ids = teams.map(x => x.id); if (shuffle) ids.sort(() => Math.random() - .5);
     let rows;
-    if (t.format === "round_robin") rows = B.buildLeague(ids, bo, { stage: "league" });
-    else if (t.format === "group_playoffs") {
-      const max = Math.floor(ids.length / 2), g = +prompt(`Jumlah grup (2–${max})?`, String(Math.min(2, max)));
-      if (!(g >= 2 && g <= max)) throw new Error("Jumlah grup tidak valid.");
-      rows = B.buildGroups(ids, g, bo);
-    } else rows = B.buildBracket(ids);
+    if (t.format === "round_robin" || t.format === "group_playoffs") {
+      const bo = +prompt("Best of untuk fase liga/grup (1, 2, atau 3)?\nBo2: seri 1:1 boleh (1 poin).", "2");
+      if (![1, 2, 3].includes(bo)) throw new Error("Best of harus 1, 2, atau 3.");
+      if (t.format === "round_robin") rows = B.buildLeague(ids, bo, { stage: "league" });
+      else {
+        const max = Math.floor(ids.length / 2), g = +prompt(`Jumlah grup (2–${max})?`, String(Math.min(2, max)));
+        if (!(g >= 2 && g <= max)) throw new Error("Jumlah grup tidak valid.");
+        rows = B.buildGroups(ids, g, bo);
+      }
+    } else if (t.format === "double_elimination") rows = B.buildDoubleElim(ids);
+    else rows = B.buildBracket(ids);
     rows = rows.map(m => ({ ...m, tournament_id: t.id }));
     await sb.from("matches").delete().eq("tournament_id", t.id);
     const { error } = await sb.from("matches").insert(rows); if (error) throw error;
@@ -186,7 +188,7 @@
     const cur = tournaments.find(x => x.id === selT);
     const { data: ms } = selT ? await sb.from("matches").select("*, team1:teams!matches_team1_id_fkey(id,name), team2:teams!matches_team2_id_fkey(id,name)").eq("tournament_id", selT).order("round").order("position") : { data: [] };
     ARES.annotate(ms || [], cur?.status);
-    const byRound = {}; (ms || []).forEach(m => (byRound[(m._ko ? "1" : "0") + "|" + String(m.round).padStart(3, "0") + "|" + (m.group_name || "")] ||= []).push(m));
+    const byRound = {}; (ms || []).forEach(m => (byRound[(m._ko ? "1" : "0") + "|" + (m.bracket_side || "") + "|" + String(m.round).padStart(3, "0") + "|" + (m.group_name || "")] ||= []).push(m));
     const editableCount = (ms || []).filter(m => !m.is_bye && m.team1_id && m.team2_id).length;
     $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3><div style="display:flex;gap:8px">${editableCount ? '<button type="button" class="btn-primary sm" id="saveallm">SAVE ALL</button>' : ""}${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div></div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
       ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (knockout: Final Bo5, Semi Final Bo3, lainnya Bo1; liga/grup sesuai Bo yang dipilih — Bo2 boleh seri).</small>` : ""}

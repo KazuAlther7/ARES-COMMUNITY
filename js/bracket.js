@@ -1,4 +1,4 @@
-// Single-elimination bracket builder (pure, testable).
+// Bracket builders (pure, testable): single elimination, double elimination, league/group.
 (function (root) {
   function seedOrder(size) {
     let s = [1];
@@ -11,32 +11,6 @@
     if (left === 1) return "Semi Final";
     if (left === 2) return "Quarter Final";
     return "Round of " + Math.pow(2, left + 1);
-  }
-  // teamIds: array in seed order. Returns match objects (no ids) with byes auto-advanced.
-  function buildBracket(teamIds) {
-    const n = teamIds.length;
-    if (n < 2) throw new Error("Minimal 2 tim");
-    let size = 2; while (size < n) size *= 2;
-    const total = Math.log2(size);
-    const order = seedOrder(size);
-    const rounds = [];
-    for (let r = 1; r <= total; r++) {
-      const cnt = size / Math.pow(2, r), arr = [];
-      for (let p = 1; p <= cnt; p++) arr.push({ round: r, position: p, round_name: roundName(r, total), team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: bestOf(r, total), winner_id: null, status: "scheduled", is_bye: false });
-      rounds.push(arr);
-    }
-    rounds[0].forEach((m, i) => {
-      const a = order[i * 2], b = order[i * 2 + 1];
-      m.team1_id = teamIds[a - 1] || null;
-      m.team2_id = teamIds[b - 1] || null;
-      if (m.team1_id && !m.team2_id) { m.is_bye = true; m.status = "completed"; m.winner_id = m.team1_id; }
-    });
-    for (let r = 0; r < total - 1; r++) rounds[r].forEach(m => {
-      if (!m.winner_id) return;
-      const nx = rounds[r + 1][Math.ceil(m.position / 2) - 1];
-      nx[m.position % 2 ? "team1_id" : "team2_id"] = m.winner_id;
-    });
-    return rounds.flat();
   }
   // Aturan MLBB (knockout): Final Bo5, Semi Final Bo3, sisanya Bo1.
   function bestOf(round, maxR) { return round === maxR ? 5 : round === maxR - 1 ? 3 : 1; }
@@ -52,18 +26,115 @@
     }
     return o.sort((x, y) => (x[0] + x[1]) - (y[0] + y[1]) || y[0] - x[0]);
   }
+  // Jalanin otomatis kemenangan BYE lewat rute winner_to ({side,round,position,slot}) sampai mentok.
+  // Dipakai pas generate bracket (single & double elim) maupun reset skor (re-isi BYE tanpa ubah struktur).
+  function propagateByes(all) {
+    const key = (side, r, p) => `${side || ""}:${r}-${p}`;
+    const byKey = {}; all.forEach(m => byKey[key(m.bracket_side, m.round, m.position)] = m);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      all.forEach(m => {
+        if (m.winner_id || !m.winner_to) return;
+        const hasA = !!m.team1_id, hasB = !!m.team2_id;
+        if (hasA && !hasB) m.winner_id = m.team1_id; else if (hasB && !hasA) m.winner_id = m.team2_id; else return;
+        m.is_bye = true; m.status = "completed";
+        const t = m.winner_to, target = byKey[key(t.side, t.round, t.position)];
+        if (target) { target[t.slot === 1 ? "team1_id" : "team2_id"] = m.winner_id; changed = true; }
+      });
+    }
+  }
+  // teamIds: array in seed order. winner_to null di babak terakhir = juara turnamen.
+  function buildBracket(teamIds) {
+    const n = teamIds.length;
+    if (n < 2) throw new Error("Minimal 2 tim");
+    let size = 2; while (size < n) size *= 2;
+    const total = Math.log2(size);
+    const order = seedOrder(size);
+    const rounds = [];
+    for (let r = 1; r <= total; r++) {
+      const cnt = size / Math.pow(2, r), arr = [];
+      for (let p = 1; p <= cnt; p++) arr.push({
+        round: r, position: p, round_name: roundName(r, total), bracket_side: null,
+        team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: bestOf(r, total), winner_id: null, status: "scheduled", is_bye: false,
+        winner_to: r < total ? { side: null, round: r + 1, position: Math.ceil(p / 2), slot: p % 2 ? 1 : 2 } : null,
+        loser_to: null
+      });
+      rounds.push(arr);
+    }
+    rounds[0].forEach((m, i) => { m.team1_id = teamIds[order[i * 2] - 1] || null; m.team2_id = teamIds[order[i * 2 + 1] - 1] || null; });
+    const all = rounds.flat();
+    propagateByes(all);
+    return all;
+  }
+  // Double elimination standar (tanpa bracket reset di grand final — pemenang grand final langsung juara).
+  // Minimal 4 tim. Ukuran bracket dibulatkan ke pangkat 2 terdekat (sisanya BYE di Winners Bracket ronde 1).
+  function buildDoubleElim(teamIds) {
+    const n = teamIds.length;
+    if (n < 4) throw new Error("Minimal 4 tim untuk Double Elimination");
+    let size = 2; while (size < n) size *= 2;
+    const k = Math.log2(size);
+    const order = seedOrder(size);
+    const wb = [];
+    for (let r = 1; r <= k; r++) {
+      const cnt = size / Math.pow(2, r), arr = [];
+      for (let p = 1; p <= cnt; p++) arr.push({
+        round: r, position: p, round_name: "Winners · " + roundName(r, k), bracket_side: "winners",
+        team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: bestOf(r, k), winner_id: null, status: "scheduled", is_bye: false,
+        winner_to: r < k ? { side: "winners", round: r + 1, position: Math.ceil(p / 2), slot: p % 2 ? 1 : 2 } : { side: "final", round: 1, position: 1, slot: 1 },
+        loser_to: null
+      });
+      wb.push(arr);
+    }
+    wb[0].forEach((m, i) => { m.team1_id = teamIds[order[i * 2] - 1] || null; m.team2_id = teamIds[order[i * 2 + 1] - 1] || null; });
+
+    const mkLB = (round, position) => ({
+      round, position, round_name: "Losers · Round " + round, bracket_side: "losers",
+      team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: 1, winner_id: null, status: "scheduled", is_bye: false,
+      winner_to: null, loser_to: null
+    });
+
+    const L = [];
+    const l1cnt = size / 4;
+    const arr1 = []; for (let p = 1; p <= l1cnt; p++) arr1.push(mkLB(1, p));
+    L.push(arr1);
+    wb[0].forEach((m, i) => { m.loser_to = { side: "losers", round: 1, position: Math.ceil((i + 1) / 2), slot: (i + 1) % 2 ? 1 : 2 }; });
+    let lno = 2, survivors = l1cnt;
+    for (let i = 2; i <= k; i++) {
+      if (i > 2) { // ronde konsolidasi: samain jumlah tim sisa LB dgn jumlah tim kalah WB ronde ini
+        const cnt = survivors / 2, arr = []; for (let p = 1; p <= cnt; p++) arr.push(mkLB(lno, p));
+        L[L.length - 1].forEach((m, idx) => { m.winner_to = { side: "losers", round: lno, position: Math.ceil((idx + 1) / 2), slot: (idx + 1) % 2 ? 1 : 2 }; });
+        L.push(arr); lno++; survivors = cnt;
+      }
+      const cnt = survivors, arr = []; for (let p = 1; p <= cnt; p++) arr.push(mkLB(lno, p));
+      L[L.length - 1].forEach((m, idx) => { m.winner_to = { side: "losers", round: lno, position: idx + 1, slot: 1 }; });
+      wb[i - 1].forEach((m, idx) => { m.loser_to = { side: "losers", round: lno, position: idx + 1, slot: 2 }; });
+      L.push(arr); lno++; survivors = cnt;
+    }
+    L[L.length - 1].forEach(m => { m.winner_to = { side: "final", round: 1, position: 1, slot: 2 }; m.best_of = 3; }); // LB Final Bo3
+
+    const gf = {
+      round: 1, position: 1, round_name: "Grand Final", bracket_side: "final",
+      team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: 5, winner_id: null, status: "scheduled", is_bye: false,
+      winner_to: null, loser_to: null
+    };
+
+    const all = [...wb.flat(), ...L.flat(), gf];
+    propagateByes(all);
+    return all;
+  }
   // Nomor match, Bo, dan status turunan (ikut status turnamen). tstat: string atau fn(match).
   function annotate(ms, tstat) {
     const by = {};
     ms.forEach(m => (by[m.tournament_id] ||= []).push(m));
     Object.values(by).forEach(list => {
-      const ko = list.filter(isKO).sort((a, b) => a.round - b.round || a.position - b.position);
+      const ko = list.filter(isKO).sort((a, b) => (a.bracket_side || "").localeCompare(b.bracket_side || "") || a.round - b.round || a.position - b.position);
       const lg = list.filter(m => !isKO(m)).sort((a, b) => a.round - b.round || (a.group_name || "").localeCompare(b.group_name || "") || a.position - b.position);
-      const maxR = ko.length ? Math.max(...ko.map(m => m.round)) : 0; let n = 0;
+      let n = 0;
       const now = Date.now();
       [...lg, ...ko].forEach(m => {
-        m._ko = isKO(m); m._maxR = maxR;
-        m._bo = m._ko ? bestOf(m.round, maxR) : (m.best_of || 1);
+        m._ko = isKO(m);
+        m._bo = m.best_of || 1; // trust nilai yg di-generate (formula round/maxR gak berlaku generik buat double elim)
         m._no = m.is_bye ? null : ++n;
         const ts = typeof tstat === "function" ? tstat(m) : tstat;
         const timeLive = m.scheduled_at && new Date(m.scheduled_at).getTime() <= now; // sudah lewat jam jadwal
@@ -112,6 +183,6 @@
     return groups.flatMap((gi, k) => buildLeague(gi, bo, { stage: "group", group: "Group " + String.fromCharCode(65 + k) }));
   }
   const buildPlayoffs = (seedIds) => buildBracket(seedIds).map(m => ({ ...m, stage: "playoff", group_name: null }));
-  const api = { buildBracket, seedOrder, roundName, bestOf, scoreOptions, annotate, isKO, isDone, winsNeeded, standings, roundRobin, buildLeague, buildGroups, buildPlayoffs };
+  const api = { buildBracket, buildDoubleElim, seedOrder, roundName, bestOf, scoreOptions, annotate, isKO, isDone, winsNeeded, standings, roundRobin, buildLeague, buildGroups, buildPlayoffs, propagateByes };
   if (typeof module !== "undefined") module.exports = api; else root.ARES_BRACKET = api;
 })(typeof window !== "undefined" ? window : globalThis);
