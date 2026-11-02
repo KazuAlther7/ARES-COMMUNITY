@@ -30,6 +30,10 @@ Jalankan sekali di Supabase SQL Editor (kalau kolom belum ada):
 alter table tournaments add column if not exists standings_mode text not null default 'normal';
 alter table tournaments add column if not exists qualify_count integer;
 alter table tournaments add column if not exists is_hidden boolean not null default false;
+-- Double Elimination: routing eksplisit tiap match (pengganti rumus round+1 yg cuma berlaku di single bracket)
+alter table matches add column if not exists bracket_side text;      -- 'winners' | 'losers' | 'final' | null (single elim & playoff grup)
+alter table matches add column if not exists winner_to jsonb;        -- {side,round,position,slot} tujuan pemenang; null = juara bracket ini
+alter table matches add column if not exists loser_to jsonb;         -- {side,round,position,slot} tujuan yg kalah (drop ke losers bracket); null = tersingkir
 ```
 
 ## Folder convention
