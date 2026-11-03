@@ -102,6 +102,41 @@
     };
   }
 
+  // Menu seeding: admin atur urutan seed tim (↑ ↓, acak, atau urut pendaftaran). Resolve {ids, shuffle} atau null kalau dibatalkan.
+  function pickSeeds(teams, format) {
+    return new Promise((resolve) => {
+      const hy = format === "hybrid_elimination";
+      let list = teams.map(x => ({ id: x.id, name: x.name || "?" })), shuffle = true;
+      const back = document.createElement("div"); back.className = "modal-back";
+      const tag = (i) => !hy ? "" : i < 2 ? `<em class="sd-tag up">UPPER · M${i + 3}</em>` : i < 6 ? `<em class="sd-tag pi">${shuffle ? "PLAY-IN · ACAK" : "PLAY-IN M" + (Math.floor((i - 2) / 2) + 1)}</em>` : '<em class="sd-tag out">TIDAK IKUT</em>';
+      const draw = () => {
+        back.innerHTML = `<div class="modal seed-modal"><button type="button" class="modal-x" data-sd="x">×</button>
+          <div class="eyebrow">SEEDING</div><h3>ATUR SEED TIM</h3>
+          <p class="sd-hint">${hy ? "Seed 1 &amp; 2 langsung ke Upper Bracket (M3/M4). Seed 3–6 main Play-In (M1/M2). Seed 7+ tidak ikut playoff." : "Seed 1 = unggulan teratas. Urutan ini dipakai untuk menyusun bracket."}</p>
+          <div class="sd-tools"><button type="button" data-sd="rand">ACAK SEMUA</button><button type="button" data-sd="reg">URUT PENDAFTARAN</button></div>
+          <ol class="sd-list">${list.map((x, i) => `<li class="${hy && i >= 6 ? "out" : ""}"><b>${i + 1}</b><span>${esc(x.name)}</span>${tag(i)}<button type="button" data-sd="up" data-i="${i}" ${i ? "" : "disabled"}>↑</button><button type="button" data-sd="dn" data-i="${i}" ${i < list.length - 1 ? "" : "disabled"}>↓</button></li>`).join("")}</ol>
+          ${hy ? `<label class="chk sd-chk"><input type="checkbox" data-sd="shuf" ${shuffle ? "checked" : ""}> Acak 4 tim Play-In (seed 3–6) ke M1 &amp; M2</label>` : ""}
+          <div class="sd-foot"><button type="button" class="btn-ghost" data-sd="x">BATAL</button><button type="button" class="btn-primary" data-sd="ok">GENERATE BRACKET</button></div></div>`;
+      };
+      const onKey = (e) => { if (e.key === "Escape") close(null); };
+      const close = (v) => { document.removeEventListener("keydown", onKey); back.remove(); resolve(v); };
+      document.addEventListener("keydown", onKey);
+      back.onclick = (e) => {
+        const b = e.target.closest("[data-sd]"); if (!b) { if (e.target === back) close(null); return; }
+        const i = +b.dataset.i, k = b.dataset.sd;
+        if (k === "x") return close(null);
+        if (k === "ok") return close({ ids: list.map(x => x.id), shuffle });
+        if (k === "shuf") shuffle = b.checked;
+        if (k === "up" && i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]];
+        if (k === "dn" && i < list.length - 1) [list[i + 1], list[i]] = [list[i], list[i + 1]];
+        if (k === "reg") list = teams.map(x => ({ id: x.id, name: x.name || "?" }));
+        if (k === "rand") for (let n = list.length - 1; n > 0; n--) { const j = Math.floor(Math.random() * (n + 1)); [list[n], list[j]] = [list[j], list[n]]; }
+        draw();
+      };
+      draw(); document.body.appendChild(back);
+    });
+  }
+
   async function generateBracket(t) {
     const B = ARES_BRACKET;
     const { data: teams } = await sb.from("teams").select("id,name").eq("tournament_id", t.id).order("created_at");
@@ -111,8 +146,9 @@
     const { count } = await sb.from("matches").select("id", { count: "exact", head: true }).eq("tournament_id", t.id);
     if (count && !confirm("Jadwal/bracket sudah ada. Generate ulang akan menghapus semua match & skor. Lanjut?")) return;
     const hybrid = t.format === "hybrid_elimination";
-    const shuffle = hybrid ? false : confirm(`${teams.length} tim. OK = acak seed/undian, Cancel = urut pendaftaran.`);
-    let ids = teams.map(x => x.id); if (shuffle) ids.sort(() => Math.random() - .5);
+    let ids = teams.map(x => x.id), hyShuffle = false;
+    if (t.format === "round_robin") { if (confirm(`${teams.length} tim. OK = acak urutan, Cancel = urut pendaftaran.`)) ids.sort(() => Math.random() - .5); }
+    else { const pick = await pickSeeds(teams, t.format); if (!pick) return; ids = pick.ids; hyShuffle = pick.shuffle; }
     let rows;
     if (t.format === "round_robin" || t.format === "group_playoffs") {
       const bo = +prompt("Best of untuk fase liga/grup (1, 2, atau 3)?\nBo2: seri 1:1 boleh (1 poin).", "2");
@@ -125,11 +161,8 @@
       }
     } else if (t.format === "double_elimination") rows = B.buildDoubleElim(ids);
     else if (hybrid) {
-      // Seed 1 & 2 (urutan pendaftaran di menu Teams) langsung masuk Upper Bracket (M3/M4). 4 tim berikutnya diacak ke Play-In M1 & M2.
-      const nm = (i) => teams[i].name || "?";
-      const out = teams.slice(6).map(x => x.name).join(", ");
-      if (!confirm(`Playoff 6 tim (format MPL):\n• Seed 1: ${nm(0)} → Upper Bracket (M3)\n• Seed 2: ${nm(1)} → Upper Bracket (M4)\n• 4 tim lain diacak ke M1 & M2: ${teams.slice(2, 6).map(x => x.name).join(", ")}${out ? `\n\nTidak ikut playoff (di luar 6 teratas): ${out}` : ""}\n\nLanjut?`)) return;
-      const rest = ids.slice(2, 6); for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+      // Seed 1 & 2 (hasil pilihan admin) langsung masuk Upper Bracket (M3/M4). Seed 3-6 ke Play-In M1 & M2 — diacak kalau opsinya dicentang.
+      const rest = ids.slice(2, 6); if (hyShuffle) for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
       rows = B.buildHybridElim([ids[0], ids[1], ...rest]);
     } else rows = B.buildBracket(ids);
     rows = rows.map(m => ({ ...m, tournament_id: t.id }));
