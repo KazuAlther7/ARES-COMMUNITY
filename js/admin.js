@@ -61,6 +61,9 @@
     <form class="a-card" id="tf"><h3>${t.id ? "EDIT" : "CREATE"} TOURNAMENT</h3>
       <label>Nama<input name="name" required value="${esc(t.name)}"></label>
       <label>Format<select name="format">${opts(Object.entries(FORMATS), t.format || "single_elimination")}</select></label>
+      <label>Game<div class="combo"><input name="game" value="${esc(t.game ?? "Mobile Legends")}" placeholder="ketik nama game"><select id="game-quick" title="Pilih cepat">${["Cepat", "Mobile Legends", "Free Fire", "PUBG Mobile", "Honor of Kings", "Call of Duty Mobile", "Valorant", "eFootball"].map((n, i) => `<option value="${i ? n : ""}">${n}</option>`).join("")}</select></div></label>
+      <label class="chk" id="third-opt" hidden><input type="checkbox" name="third_place" ${t.third_place ? "checked" : ""}> Ada Perebutan Juara 3 (match terpisah: 2 tim yang kalah di Semi Final)</label>
+      <label class="chk"><input type="checkbox" name="predictions_enabled" ${t.predictions_enabled ? "checked" : ""}> Aktifkan Predictions (pengunjung bisa menebak juara bracket)</label>
       <div class="row2" id="stand-opts" hidden><label>Mode klasemen (liga/grup)<select name="standings_mode">${opts([["normal", "Normal Group Standings"], ["mlbb", "MLBB Group Standings"]], t.standings_mode || "normal")}</select></label>
       <label id="qual-opt" hidden>Tim lolos / grup (Group+Playoffs)<input name="qualify_count" type="number" min="1" value="${t.qualify_count ?? 2}"></label></div>
       <div class="row2"><label>Status<select name="status">${opts([["upcoming", "Upcoming"], ["live", "Live"], ["completed", "Completed"]], t.status || "upcoming")}</select></label>
@@ -73,15 +76,17 @@
       <button class="btn-primary" type="submit">${t.id ? "SAVE CHANGES" : "CREATE TOURNAMENT"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tcancel">CANCEL</button>' : ""}</form>
     <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}${x.is_hidden ? ' <small style="color:#ff8a91">· HIDDEN</small>' : ""}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate jadwal/bracket</button>${x.format === "group_playoffs" ? `<button data-act="playoffs" data-id="${x.id}">Generate playoffs</button>` : ""}<button data-act="hide" data-id="${x.id}">${x.is_hidden ? "Unhide" : "Hide"}</button><button data-act="share" data-id="${x.id}">Share</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
     // Mode klasemen & tim lolos cuma muncul untuk format yang punya klasemen.
-    const syncFmt = () => { const f = $("tf").elements.format.value; $("stand-opts").hidden = !(f === "round_robin" || f === "group_playoffs"); $("qual-opt").hidden = f !== "group_playoffs"; $("stand-opts").style.gridTemplateColumns = f === "group_playoffs" ? "" : "1fr"; };
+    const syncFmt = () => { const f = $("tf").elements.format.value; $("stand-opts").hidden = !(f === "round_robin" || f === "group_playoffs"); $("qual-opt").hidden = f !== "group_playoffs"; $("third-opt").hidden = !(f === "single_elimination" || f === "group_playoffs"); $("stand-opts").style.gridTemplateColumns = f === "group_playoffs" ? "" : "1fr"; };
     $("tf").elements.format.onchange = syncFmt; syncFmt();
+    $("game-quick").onchange = (e) => { if (e.target.value) $("tf").elements.game.value = e.target.value; e.target.selectedIndex = 0; };
     $("mt-quick").onchange = (e) => { if (e.target.value) $("tf").elements.max_teams.value = e.target.value; e.target.selectedIndex = 0; };
     $("tf").onsubmit = (e) => { e.preventDefault(); const btn = e.submitter; run(async () => {
       const f = new FormData(e.target);
-      const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: ["round_robin", "group_playoffs"].includes(f.get("format")) ? (f.get("standings_mode") || "normal") : "normal", qualify_count: f.get("format") === "group_playoffs" ? (+f.get("qualify_count") || null) : null, status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
+      const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: ["round_robin", "group_playoffs"].includes(f.get("format")) ? (f.get("standings_mode") || "normal") : "normal", qualify_count: f.get("format") === "group_playoffs" ? (+f.get("qualify_count") || null) : null, status: f.get("status"), max_teams: +f.get("max_teams") || null, game: (f.get("game") || "").trim() || null, third_place: ["single_elimination", "group_playoffs"].includes(f.get("format")) && f.get("third_place") === "on", predictions_enabled: f.get("predictions_enabled") === "on", prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
       let id = t.id;
-      if (id) { const { error } = await sb.from("tournaments").update(row).eq("id", id); if (error) throw error; }
-      else { const { data, error } = await sb.from("tournaments").insert(row).select("id").single(); if (error) throw error; id = data.id; }
+      const dbErr = (er) => /column|schema cache/i.test(er.message || "") ? new Error("Kolom baru (game / juara 3 / predictions) belum ada di database. Jalankan supabase/update-juara3-game-predictions.sql di Supabase SQL Editor dulu, lalu coba lagi.") : er;
+      if (id) { const { error } = await sb.from("tournaments").update(row).eq("id", id); if (error) throw dbErr(error); }
+      else { const { data, error } = await sb.from("tournaments").insert(row).select("id").single(); if (error) throw dbErr(error); id = data.id; }
       const img = {}, lf = f.get("logo"), bf = f.get("banner");
       if (btn && (lf?.size || bf?.size)) btn.textContent = "UPLOADING…";
       if (lf?.size) { const u = await safeUpload(lf, "tournaments"); if (u) img.logo_url = u; }
@@ -164,7 +169,10 @@
       // Seed 1 & 2 (hasil pilihan admin) langsung masuk Upper Bracket (M3/M4). Seed 3-6 ke Play-In M1 & M2 — diacak kalau opsinya dicentang.
       const rest = ids.slice(2, 6); if (hyShuffle) for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
       rows = B.buildHybridElim([ids[0], ids[1], ...rest]);
-    } else rows = B.buildBracket(ids);
+    } else {
+      if (t.third_place && ids.length < 4) throw new Error("Perebutan Juara 3 butuh minimal 4 tim. Matikan opsinya di Edit turnamen atau tambah tim.");
+      rows = B.buildBracket(ids, { third: !!t.third_place });
+    }
     rows = rows.map(m => ({ ...m, tournament_id: t.id }));
     await sb.from("matches").delete().eq("tournament_id", t.id);
     const { error } = await sb.from("matches").insert(rows); if (error) throw error;

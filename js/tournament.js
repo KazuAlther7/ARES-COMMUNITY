@@ -84,8 +84,8 @@
       }).join("");
     }
     if (ko.length) {
-      const groups = {}; ko.forEach(m => (groups[m.round] ||= []).push(m));
-      boxes += Object.keys(groups).sort((a, b) => a - b).map(r => {
+      const groups = {}; ko.forEach(m => (groups[m.bracket_side === "third" ? "third" : m.round] ||= []).push(m));
+      boxes += Object.keys(groups).sort((a, b) => (a === "third") - (b === "third") || a - b).map(r => {
         const ms = groups[r].sort((a, b) => a.position - b.position);
         return spBox(ms[0].round_name || ("Round " + r), ms);
       }).join("");
@@ -188,12 +188,13 @@
     if (error || !t) { $("t-head").innerHTML = '<div class="empty-state">Turnamen tidak ditemukan.</div>'; return; }
     document.title = `${t.name} — ARES COMMUNITY`;
     const champ = t.champion_id && (teams || []).find(x => x.id === t.champion_id);
+    const tm3 = (ms || []).find(m => m.bracket_side === "third" && m.winner_id), third3 = tm3 && (tm3.winner_id === tm3.team1_id ? tm3.team1 : tm3.team2);
     $("t-head").innerHTML = `<div class="t-hero" ${t.banner_url ? `style="background-image:linear-gradient(90deg,#0b0c0ef2,#0b0c0e99),url('${esc(t.banner_url)}')"` : ""}>
       ${t.logo_url ? `<img class="t-logo" src="${esc(t.logo_url)}" alt="">` : ""}
-      <div><div class="eyebrow">${esc((t.format || "").replaceAll("_", " ").toUpperCase())} · ${esc((t.status || "upcoming").toUpperCase())}</div>
+      <div><div class="eyebrow">${t.game ? esc(t.game.toUpperCase()) + " · " : ""}${esc((t.format || "").replaceAll("_", " ").toUpperCase())} · ${esc((t.status || "upcoming").toUpperCase())}</div>
       <h1 class="t-title">${esc(t.name)}</h1>
       <div class="t-meta"><span>PRIZE POOL <b>Rp ${money(t.prize_pool)}</b></span>${t.start_date ? `<span>START <b>${new Date(t.start_date).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</b></span>` : ""}<span>TEAMS <b>${(teams || []).length}${t.max_teams ? " / " + t.max_teams : ""}</b></span></div>
-      <div class="share-bar"><button type="button" data-share="native">SHARE</button><a data-share="wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`${t.name} — bracket & skor live di ARES COMMUNITY\n${shareUrl}`)}">WHATSAPP</a><button type="button" data-share="copy">COPY LINK</button></div>${window.ARES.admin.on ? `<div class="admin-bar"><a href="admin.html#tournaments">Edit / Generate bracket ↗</a><a href="admin.html#teams:${t.id}">Kelola tim ↗</a><a href="admin.html#matches:${t.id}">Semua match ↗</a><a href="#" data-reset="${t.id}">Reset semua skor</a></div>` : ""}${champ ? `<div class="champion">🏆 CHAMPION · <b data-team="${champ.id}" style="cursor:pointer">${esc(champ.name)}</b></div>` : ""}</div></div>`;
+      <div class="share-bar"><button type="button" data-share="native">SHARE</button><a data-share="wa" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`${t.name} — bracket & skor live di ARES COMMUNITY\n${shareUrl}`)}">WHATSAPP</a><button type="button" data-share="copy">COPY LINK</button></div>${window.ARES.admin.on ? `<div class="admin-bar"><a href="admin.html#tournaments">Edit / Generate bracket ↗</a><a href="admin.html#teams:${t.id}">Kelola tim ↗</a><a href="admin.html#matches:${t.id}">Semua match ↗</a><a href="#" data-reset="${t.id}">Reset semua skor</a></div>` : ""}${champ ? `<div class="champion">🏆 CHAMPION · <b data-team="${champ.id}" style="cursor:pointer">${esc(champ.name)}</b>${third3 ? ` &nbsp;·&nbsp; 🥉 JUARA 3 · <b data-team="${third3.id}" style="cursor:pointer">${esc(third3.name)}</b>` : ""}</div>` : ""}</div></div>`;
 
     const A = window.ARES;
     A.annotate(ms || [], t.status);
@@ -214,12 +215,17 @@
       if (hk) { drawHybridLines(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawHybridLines); }
     } else {
       const rounds = {};
-      ko.forEach(m => (rounds[m.round] ||= []).push(m));
+      ko.filter(m => m.bracket_side !== "third").forEach(m => (rounds[m.round] ||= []).push(m));
       const keys = Object.keys(rounds).sort((a, b) => a - b), last = keys[keys.length - 1];
       $("bracket").className = "bracket" + (!useScorePanel && A.admin.on ? " adm" : "");
       $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "to-champ" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => bItem(m, A, useScorePanel)).join("")}</div></div>`).join("") + champCol(rounds[last][0]) : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
     }
 
+    // Perebutan Juara 3 (single elim / playoff grup): kartu terpisah di bawah bracket utama
+    const thirdEl = $("t-third"), th = isDE ? null : ko.find(m => m.bracket_side === "third");
+    if (thirdEl) { thirdEl.hidden = !th; thirdEl.innerHTML = th ? `<div class="eyebrow" style="margin:0 0 10px">PEREBUTAN JUARA 3 <small style="color:#777;margin-left:6px">BO${th._bo}</small></div><div class="third-card${A.admin.on && !useScorePanel ? " adm" : ""}">${bItem(th, A, useScorePanel)}</div>${th.winner_id ? `<div class="champion" style="margin-top:6px">🥉 JUARA 3 · <b data-team="${th.winner_id}" style="cursor:pointer">${esc((th.winner_id === th.team1_id ? th.team1 : th.team2)?.name || "")}</b></div>` : ""}` : ""; }
+    // Predictions (on/off dari setting turnamen)
+    const pe = $("t-predict"); if (pe) { pe.hidden = !t.predictions_enabled; if (t.predictions_enabled) window.ARES.renderPredict($("t-predict-body"), t, teams || []); }
     applyHl();
     $("t-info").innerHTML = `${t.description ? `<div class="eyebrow">ABOUT</div><p class="prose">${esc(t.description)}</p>` : ""}
       ${t.rules ? `<div class="eyebrow" style="margin-top:28px">RULES</div><p class="prose" style="white-space:pre-line">${esc(t.rules)}</p>` : ""}

@@ -63,7 +63,8 @@
     }
   }
   // teamIds: array in seed order. winner_to null di babak terakhir = juara turnamen.
-  function buildBracket(teamIds) {
+  // opt.third = true → tambah match Perebutan Juara 3 (yg kalah di Semi Final), side "third". Minimal 4 tim.
+  function buildBracket(teamIds, opt = {}) {
     const n = teamIds.length;
     if (n < 2) throw new Error("Minimal 2 tim");
     let size = 2; while (size < n) size *= 2;
@@ -82,6 +83,16 @@
     }
     rounds[0].forEach((m, i) => { m.team1_id = teamIds[order[i * 2] - 1] || null; m.team2_id = teamIds[order[i * 2 + 1] - 1] || null; });
     const all = rounds.flat();
+    if (opt.third) {
+      if (n < 4) throw new Error("Perebutan Juara 3 butuh minimal 4 tim.");
+      const third = {
+        round: 1, position: 1, round_name: "Perebutan Juara 3", bracket_side: "third",
+        team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: bestOf(total - 1, total), winner_id: null, status: "scheduled", is_bye: false,
+        winner_to: null, loser_to: null
+      };
+      rounds[total - 2].forEach((m, i) => { m.loser_to = { side: "third", round: 1, position: 1, slot: i + 1 }; });
+      all.push(third);
+    }
     propagateByes(all);
     return all;
   }
@@ -176,8 +187,11 @@
       // Hybrid (ada Play-In): nomor match urut sesuai alur main — M1-M2 Play-In, M3-M4 Upper, M5 Lower, M6 Upper Final, M7 Lower Final, M8 Grand Final.
       const hy = ko.some(m => m.bracket_side === "playin");
       const hyKey = (m) => m.bracket_side === "playin" ? 10 : m.bracket_side === "winners" ? (m.round + 1) * 10 + 1 : m.bracket_side === "losers" ? (m.round + 2) * 10 : 900;
+      // Juara 3 (side "third") dinomori tepat sebelum Final.
+      const maxR = Math.max(0, ...ko.filter(m => !m.bracket_side).map(m => m.round));
+      const sd = (m) => m.bracket_side === "third" ? "" : (m.bracket_side || ""), rd = (m) => m.bracket_side === "third" ? maxR : m.round, ps = (m) => m.bracket_side === "third" ? -1 : m.position;
       ko.sort(hy ? (a, b) => hyKey(a) - hyKey(b) || a.position - b.position
-        : (a, b) => (a.bracket_side || "").localeCompare(b.bracket_side || "") || a.round - b.round || a.position - b.position);
+        : (a, b) => sd(a).localeCompare(sd(b)) || rd(a) - rd(b) || ps(a) - ps(b));
       const lg = list.filter(m => !isKO(m)).sort((a, b) => a.round - b.round || (a.group_name || "").localeCompare(b.group_name || "") || a.position - b.position);
       let n = 0;
       const now = Date.now();
@@ -240,7 +254,7 @@
     ids.forEach((id, i) => { const row = Math.floor(i / g); groups[row % 2 ? g - 1 - (i % g) : i % g].push(id); }); // snake seeding
     return groups.flatMap((gi, k) => buildLeague(gi, bo, { stage: "group", group: "Group " + String.fromCharCode(65 + k) }));
   }
-  const buildPlayoffs = (seedIds) => buildBracket(seedIds).map(m => ({ ...m, stage: "playoff", group_name: null }));
+  const buildPlayoffs = (seedIds, opt) => buildBracket(seedIds, opt).map(m => ({ ...m, stage: "playoff", group_name: null }));
   const api = { buildBracket, buildDoubleElim, buildHybridElim, seedOrder, roundName, bestOf, scoreOptions, annotate, isKO, isDone, winsNeeded, standings, roundRobin, buildLeague, buildGroups, buildPlayoffs, propagateByes, fedSlots };
   if (typeof module !== "undefined") module.exports = api; else root.ARES_BRACKET = api;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -99,7 +99,7 @@
       const self = ko.find(x => x.id === m.id); // winner_to/loser_to hasil query sebelum skor ini disimpan
       const wt = self?.winner_to, lt = self?.loser_to;
       if (wt) { const nx = ko.find(x => (x.bracket_side || null) === (wt.side || null) && x.round === wt.round && x.position === wt.position); if (nx) { const { error: e2 } = await client.from("matches").update({ [wt.slot === 1 ? "team1_id" : "team2_id"]: winner }).eq("id", nx.id); if (e2) throw e2; } }
-      else { await client.from("tournaments").update({ champion_id: winner, status: "completed" }).eq("id", m.tournament_id); final = true; }
+      else if (self?.bracket_side !== "third") { await client.from("tournaments").update({ champion_id: winner, status: "completed" }).eq("id", m.tournament_id); final = true; } // match juara 3 tidak menentukan juara
       if (lt && loser) { const nx = ko.find(x => (x.bracket_side || null) === (lt.side || null) && x.round === lt.round && x.position === lt.position); if (nx) { const { error: e3 } = await client.from("matches").update({ [lt.slot === 1 ? "team1_id" : "team2_id"]: loser }).eq("id", nx.id); if (e3) throw e3; } }
       // Double elimination: match BYE di Winners Bracket gak punya "yang kalah", jadi slot Losers Bracket terkait
       // baru kelihatan lengkap belakangan — cek ulang & auto-selesaikan BYE baru yg baru kebuka.
@@ -145,7 +145,7 @@
   async function generatePlayoffs(tid, k) {
     const B = window.ARES_BRACKET;
     const [{ data: t }, { data: ms0 }] = await Promise.all([
-      client.from("tournaments").select("standings_mode").eq("id", tid).single(),
+      client.from("tournaments").select("standings_mode,third_place").eq("id", tid).single(),
       client.from("matches").select("*").eq("tournament_id", tid)
     ]);
     const mode = t?.standings_mode === "mlbb" ? "mlbb" : "normal";
@@ -162,7 +162,7 @@
     const old = (ms0 || []).filter(m => m.stage === "playoff");
     if (old.length && !confirm("Playoff sudah ada. Generate ulang akan menghapusnya. Lanjut?")) return null;
     if (old.length) await client.from("matches").delete().in("id", old.map(x => x.id));
-    const rows = B.buildPlayoffs(seeds).map(m => ({ ...m, tournament_id: tid }));
+    const rows = B.buildPlayoffs(seeds, { third: !!t?.third_place && seeds.length >= 4 }).map(m => ({ ...m, tournament_id: tid }));
     const { error } = await client.from("matches").insert(rows); if (error) throw error;
     await client.from("tournaments").update({ champion_id: null, qualify_count: k }).eq("id", tid);
     return { seeds: seeds.length, matches: rows.length };
@@ -172,5 +172,42 @@
     if (!o.some(x => x[0] === cur[0] && x[1] === cur[1])) o.push(cur);
     return o.map(([a, b]) => `<option value="${a}-${b}" ${a === cur[0] && b === cur[1] ? "selected" : ""}>${a} : ${b}</option>`).join("");
   };
-  window.ARES = { saveMatchResult, resetScores, generatePlayoffs, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
+
+  // ----- Predictions: pengunjung tebak juara (nama + tim). Dipakai di tournament.html & predictions.html -----
+  async function renderPredict(el, t, teams) {
+    const st = el.__pred ||= { team: null, name: "" };
+    const old = el.querySelector(".pred-name"); if (old) st.name = old.value; // jaga ketikan waktu auto-refresh
+    const key = "ares_pred_" + t.id; let mine = null; try { mine = JSON.parse(localStorage.getItem(key)); } catch {}
+    const { data: rows, error } = await client.from("predictions").select("id,team_id,voter_name,created_at").eq("tournament_id", t.id).order("created_at", { ascending: false });
+    if (error) { el.innerHTML = '<div class="empty-state">Predictions belum siap — jalankan SQL update di Supabase dulu.</div>'; return; }
+    const closed = t.status === "completed" || !!t.champion_id, A = window.ARES;
+    const cnt = {}; rows.forEach(r => cnt[r.team_id] = (cnt[r.team_id] || 0) + 1);
+    const total = rows.length, list = [...teams].sort((a, b) => (cnt[b.id] || 0) - (cnt[a.id] || 0) || String(a.name).localeCompare(String(b.name)));
+    const champ = t.champion_id ? teams.find(x => x.id === t.champion_id) : null;
+    const right = champ ? rows.filter(r => r.team_id === champ.id) : [];
+    const myTeam = mine && teams.find(x => x.id === mine.team);
+    const opts = list.map(x => { const c = cnt[x.id] || 0, pc = total ? Math.round(c * 100 / total) : 0;
+      return `<button type="button" class="pred-opt ${st.team === x.id ? "sel" : ""} ${champ && champ.id === x.id ? "champ" : ""}" data-pt="${x.id}" ${closed || mine ? "disabled" : ""}>${logo(x)}<span class="pn">${esc(x.name)}</span><span class="pbar"><i style="width:${pc}%"></i></span><b>${c} · ${pc}%</b></button>`; }).join("");
+    let foot;
+    if (closed) foot = `<p class="hint">Prediksi ditutup — turnamen selesai.${champ ? ` Juara: <b>${esc(champ.name)}</b>. ${right.length ? `Tebakan benar (${right.length}): ${right.map(r => esc(r.voter_name)).join(", ")}.` : "Tidak ada yang menebak benar."}` : ""}</p>`;
+    else if (mine) foot = `<p class="hint">✓ Prediksimu tersimpan: <b>${esc(mine.name)}</b> → <b>${esc(myTeam?.name || "?")}</b>.</p>`;
+    else foot = `<div class="pred-form"><input class="pred-name" maxlength="24" placeholder="Nama / nickname kamu" value="${esc(st.name)}"><button type="button" data-psend>KIRIM PREDIKSI</button></div><p class="hint">Pilih tim juara, isi namamu (1 nama = 1 prediksi, tidak bisa diubah).</p>`;
+    const adm = A.admin.on && rows.length ? `<details class="pred-adm"><summary>ADMIN · ${rows.length} prediksi</summary>${rows.map(r => `<div><span>${esc(r.voter_name)} → ${esc(teams.find(x => x.id === r.team_id)?.name || "?")}</span><button type="button" data-pdel="${r.id}">hapus</button></div>`).join("")}</details>` : "";
+    el.innerHTML = `<div class="pred"><div class="pred-total">${total} PREDIKSI MASUK${closed ? " · DITUTUP" : ""}</div><div class="pred-opts">${opts || '<div class="empty-state">Belum ada tim terdaftar.</div>'}</div>${foot}${adm}</div>`;
+    el.onclick = async (e) => {
+      const o = e.target.closest("[data-pt]"), d = e.target.closest("[data-pdel]"), s = e.target.closest("[data-psend]");
+      if (o && !o.disabled) { st.team = o.dataset.pt; const n = el.querySelector(".pred-name"); if (n) st.name = n.value; return renderPredict(el, t, teams); }
+      if (d && confirm("Hapus prediksi ini?")) { const { error: er } = await client.from("predictions").delete().eq("id", d.dataset.pdel); if (er) alert(er.message); return renderPredict(el, t, teams); }
+      if (s) {
+        const name = (el.querySelector(".pred-name").value || "").trim(); st.name = name;
+        if (!st.team) return alert("Pilih tim juara dulu."); if (name.length < 2) return alert("Isi nama minimal 2 huruf.");
+        s.disabled = true;
+        const { error: er } = await client.from("predictions").insert({ tournament_id: t.id, team_id: st.team, voter_name: name });
+        if (er) { s.disabled = false; return alert(er.code === "23505" ? "Nama itu sudah dipakai untuk memprediksi. Pakai nama lain." : (er.message || "Gagal kirim prediksi.")); }
+        try { localStorage.setItem(key, JSON.stringify({ team: st.team, name })); } catch {}
+        renderPredict(el, t, teams);
+      }
+    };
+  }
+  window.ARES = { renderPredict, saveMatchResult, resetScores, generatePlayoffs, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
 })();
