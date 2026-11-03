@@ -61,10 +61,10 @@
     <form class="a-card" id="tf"><h3>${t.id ? "EDIT" : "CREATE"} TOURNAMENT</h3>
       <label>Nama<input name="name" required value="${esc(t.name)}"></label>
       <label>Format<select name="format">${opts(Object.entries(FORMATS), t.format || "single_elimination")}</select></label>
-      <div class="row2"><label>Mode klasemen (liga/grup)<select name="standings_mode">${opts([["normal", "Normal Group Standings"], ["mlbb", "MLBB Group Standings"]], t.standings_mode || "normal")}</select></label>
-      <label>Tim lolos / grup (Group+Playoffs)<input name="qualify_count" type="number" min="1" value="${t.qualify_count ?? 2}"></label></div>
+      <div class="row2" id="stand-opts" hidden><label>Mode klasemen (liga/grup)<select name="standings_mode">${opts([["normal", "Normal Group Standings"], ["mlbb", "MLBB Group Standings"]], t.standings_mode || "normal")}</select></label>
+      <label id="qual-opt" hidden>Tim lolos / grup (Group+Playoffs)<input name="qualify_count" type="number" min="1" value="${t.qualify_count ?? 2}"></label></div>
       <div class="row2"><label>Status<select name="status">${opts([["upcoming", "Upcoming"], ["live", "Live"], ["completed", "Completed"]], t.status || "upcoming")}</select></label>
-      <label>Max tim<input name="max_teams" type="number" min="2" value="${t.max_teams ?? 16}"></label></div>
+      <label>Max tim<div class="combo"><input name="max_teams" type="number" min="2" value="${t.max_teams ?? 16}" placeholder="ketik angka"><select id="mt-quick" title="Pilih cepat">${["Cepat", 4, 6, 8, 9, 10, 12, 16, 24, 32, 64].map((n, i) => `<option value="${i ? n : ""}">${n}</option>`).join("")}</select></div></label></div>
       <div class="row2"><label>Prize pool (Rp)<input name="prize_pool" type="number" min="0" value="${t.prize_pool ?? 0}"></label>
       <label>Tanggal mulai<input name="start_date" type="datetime-local" value="${dtLocal(t.start_date)}"></label></div>
       <label>Deskripsi<textarea name="description" rows="3">${esc(t.description)}</textarea></label>
@@ -72,9 +72,13 @@
       <div class="row2"><label>Logo<input name="logo" type="file" accept="image/*"></label><label>Banner<input name="banner" type="file" accept="image/*"></label></div>
       <button class="btn-primary" type="submit">${t.id ? "SAVE CHANGES" : "CREATE TOURNAMENT"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tcancel">CANCEL</button>' : ""}</form>
     <div class="a-card"><h3>ALL TOURNAMENTS</h3>${tournaments.map(x => `<div class="a-row"><div><strong>${esc(x.name)}${x.is_hidden ? ' <small style="color:#ff8a91">· HIDDEN</small>' : ""}</strong><small>${esc(x.format)} · ${esc(x.status)}</small></div><div class="a-actions"><button data-act="edit" data-id="${x.id}">Edit</button><button data-act="teams" data-id="${x.id}">Teams</button><button data-act="bracket" data-id="${x.id}">Generate jadwal/bracket</button>${x.format === "group_playoffs" ? `<button data-act="playoffs" data-id="${x.id}">Generate playoffs</button>` : ""}<button data-act="hide" data-id="${x.id}">${x.is_hidden ? "Unhide" : "Hide"}</button><button data-act="share" data-id="${x.id}">Share</button><a href="tournament.html?id=${x.id}" target="_blank">Open ↗</a><button class="danger" data-act="del" data-id="${x.id}">Delete</button></div></div>`).join("") || '<div class="empty-state">Belum ada turnamen.</div>'}</div></div>`;
+    // Mode klasemen & tim lolos cuma muncul untuk format yang punya klasemen.
+    const syncFmt = () => { const f = $("tf").elements.format.value; $("stand-opts").hidden = !(f === "round_robin" || f === "group_playoffs"); $("qual-opt").hidden = f !== "group_playoffs"; $("stand-opts").style.gridTemplateColumns = f === "group_playoffs" ? "" : "1fr"; };
+    $("tf").elements.format.onchange = syncFmt; syncFmt();
+    $("mt-quick").onchange = (e) => { if (e.target.value) $("tf").elements.max_teams.value = e.target.value; e.target.selectedIndex = 0; };
     $("tf").onsubmit = (e) => { e.preventDefault(); const btn = e.submitter; run(async () => {
       const f = new FormData(e.target);
-      const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: f.get("standings_mode") || "normal", qualify_count: +f.get("qualify_count") || null, status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
+      const row = { name: f.get("name").trim(), format: f.get("format"), standings_mode: ["round_robin", "group_playoffs"].includes(f.get("format")) ? (f.get("standings_mode") || "normal") : "normal", qualify_count: f.get("format") === "group_playoffs" ? (+f.get("qualify_count") || null) : null, status: f.get("status"), max_teams: +f.get("max_teams") || null, prize_pool: +f.get("prize_pool") || 0, start_date: fromLocal(f.get("start_date")), description: f.get("description"), rules: f.get("rules") };
       let id = t.id;
       if (id) { const { error } = await sb.from("tournaments").update(row).eq("id", id); if (error) throw error; }
       else { const { data, error } = await sb.from("tournaments").insert(row).select("id").single(); if (error) throw error; id = data.id; }
@@ -202,6 +206,7 @@
     const editableCount = (ms || []).filter(m => !m.is_bye && m.team1_id && m.team2_id).length;
     $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3><div style="display:flex;gap:8px">${editableCount ? '<button type="button" class="btn-primary sm" id="saveallm">SAVE ALL</button>' : ""}${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div></div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
       ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (knockout: Final Bo5, Semi Final Bo3, lainnya Bo1; Hybrid MPL: Lower Final & Grand Final Bo7, lainnya Bo5; liga/grup sesuai Bo yang dipilih — Bo2 boleh seri).</small>` : ""}
+      ${(ms || []).some(m => !m.is_bye) ? `<div class="sched-box"><strong>AUTO-ISI JADWAL</strong><label>Mulai<input type="datetime-local" id="as-start"></label><label>Jeda tiap match (menit)<div class="combo"><input type="number" id="as-gap" min="1" value="60"><select id="as-quick" title="Pilih cepat">${["Cepat", 30, 45, 60, 90, 120, 180].map((n, i) => `<option value="${i ? n : ""}">${n}</option>`).join("")}</select></div></label><label class="chk"><input type="checkbox" id="as-over"> Timpa jadwal yang sudah ada</label><button type="button" class="btn-primary sm" id="as-go">ISI JADWAL</button><small>Urut nomor match (M1, M2, …). Match BYE &amp; yang sudah selesai dilewati.</small></div>` : ""}
       ${Object.keys(byRound).sort().map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
         <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || m._ph1 || "TBD")}</div>
         ${ok ? `<select class="sc2" name="sc">${ARES.scoreOpts(m)}</select>` : `<span class="m-st">—</span>`}
@@ -209,6 +214,19 @@
         <span class="m-st">${esc(m._st.toUpperCase())}</span>
         <input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}"><button class="btn-primary sm" data-save ${ok ? "" : "disabled"}>SAVE</button></div>`; }).join("")}`).join("") || '<div class="empty-state">Belum ada match. Buat bracket dari menu Tournaments.</div>'}</div>`;
     $("msel").onchange = (e) => { selT = e.target.value; renderMatches(); };
+    if ($("as-go")) {
+      $("as-quick").onchange = (e) => { if (e.target.value) $("as-gap").value = e.target.value; e.target.selectedIndex = 0; };
+      $("as-go").onclick = (e) => run(async () => {
+        const st = $("as-start").value, gap = +$("as-gap").value, over = $("as-over").checked;
+        if (!st) throw new Error("Isi jam mulai dulu."); if (!(gap > 0)) throw new Error("Jeda harus lebih dari 0 menit.");
+        const list = (ms || []).filter(m => !m.is_bye && m._st !== "completed" && (over || !m.scheduled_at)).sort((a, b) => a._no - b._no);
+        if (!list.length) throw new Error("Tidak ada match yang perlu dijadwalkan (centang 'Timpa' kalau mau ganti jadwal lama).");
+        const t0 = new Date(st).getTime();
+        const res = await Promise.all(list.map((m, i) => sb.from("matches").update({ scheduled_at: new Date(t0 + i * gap * 60000).toISOString() }).eq("id", m.id)));
+        const bad = res.find(r => r.error); if (bad) throw bad.error;
+        toast(`${list.length} match dijadwalkan, jeda ${gap} menit`); renderMatches();
+      }, e.currentTarget);
+    }
     if ($("resetall")) $("resetall").onclick = (e) => { if (!confirm("Reset SEMUA skor turnamen ini? Skor, pemenang, dan juara dihapus (bracket awal tetap).")) return; run(async () => { const n = await ARES.resetScores(selT); toast(`${n} match direset`); renderMatches(); }, e.currentTarget); };
     if ($("saveallm")) $("saveallm").onclick = async (e) => {
       const btn = e.currentTarget, rows = [...document.querySelectorAll(".m-row")].filter(r => r.querySelector(".sc2"));

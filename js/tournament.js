@@ -162,6 +162,21 @@
     if ((dx < 0 && bw.scrollLeft <= 0) || (dx > 0 && bw.scrollLeft >= max - 1)) return;
     e.preventDefault(); bw.scrollLeft += dx;
   }, { passive: false });
+  // Highlight jalur tim: klik tim di bracket → semua match tim itu menyala, sisanya redup. Klik lagi tim yg sama = buka roster. Klik area kosong = reset.
+  let hlTeam = null;
+  const applyHl = () => {
+    const root = $("bracket"); if (!root) return;
+    root.classList.toggle("hl-on", !!hlTeam);
+    root.querySelectorAll(".b-match").forEach(c => { const on = !!hlTeam && !!c.querySelector(`.slot[data-team="${hlTeam}"]`); c.classList.toggle("hl", on); c.classList.toggle("dim", !!hlTeam && !on); });
+    root.querySelectorAll(".slot").forEach(x => x.classList.toggle("hl-slot", !!hlTeam && x.dataset.team === hlTeam));
+  };
+  if (bw) bw.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-team]");
+    if (!el && e.target.closest(".b-edit, button, select, input, a")) return;
+    if (!el || !el.dataset.team) { if (hlTeam) { hlTeam = null; applyHl(); } return; }
+    if (hlTeam === el.dataset.team) { hlTeam = null; applyHl(); return; } // lanjut ke handler roster
+    e.stopPropagation(); e.preventDefault(); hlTeam = el.dataset.team; applyHl();
+  }, true);
   window.addEventListener("resize", drawHybridLines);
   if (window.ResizeObserver) new ResizeObserver(drawHybridLines).observe($("bracket"));
   async function load() {
@@ -205,6 +220,7 @@
       $("bracket").innerHTML = keys.length ? keys.map(r => `<div class="b-round ${r === last ? "to-champ" : ""}"><div class="b-title">${esc(rounds[r][0].round_name || "Round " + r)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => bItem(m, A, useScorePanel)).join("")}</div></div>`).join("") + champCol(rounds[last][0]) : '<div class="empty-state">Bracket belum dibuat oleh admin.</div>';
     }
 
+    applyHl();
     $("t-info").innerHTML = `${t.description ? `<div class="eyebrow">ABOUT</div><p class="prose">${esc(t.description)}</p>` : ""}
       ${t.rules ? `<div class="eyebrow" style="margin-top:28px">RULES</div><p class="prose" style="white-space:pre-line">${esc(t.rules)}</p>` : ""}
       ${(teams || []).length ? `<div class="eyebrow" style="margin-top:28px">PARTICIPATING TEAMS</div><div class="team-grid">${teams.map(x => `<article class="team-card" data-team="${x.id}" style="cursor:pointer">${logo(x, "lg")}<div><h3>${esc(x.name)}</h3><p>${esc(x.tag || "")}</p></div></article>`).join("")}</div>` : ""}`;
