@@ -2,7 +2,7 @@
   const { client: sb, esc, uploadImage } = window.ARES;
   const $ = (id) => document.getElementById(id);
   const ROLE_LIST = ["EXP", "Gold", "Mid", "Jungler", "Roamer"];
-  const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination (tim harus tepat 4/8/16/32)", round_robin: "Round Robin (klasemen liga)", group_playoffs: "Group Stage + Playoffs", hybrid_elimination: "Hybrid Elimination (ala Playoff MPL)" };
+  const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination (tim harus tepat 4/8/16/32)", round_robin: "Round Robin (klasemen liga)", group_playoffs: "Group Stage + Playoffs", hybrid_elimination: "Hybrid Elimination (ala Playoff MPL, 6 tim lolos)" };
   const isPow2 = (n) => n > 0 && (n & (n - 1)) === 0;
   let tab = "tournaments", tournaments = [], selT = "";
 
@@ -100,14 +100,15 @@
 
   async function generateBracket(t) {
     const B = ARES_BRACKET;
-    const { data: teams } = await sb.from("teams").select("id").eq("tournament_id", t.id).order("created_at");
-    const min = t.format === "group_playoffs" ? 4 : (t.format === "double_elimination" || t.format === "hybrid_elimination") ? 4 : 2;
+    const { data: teams } = await sb.from("teams").select("id,name").eq("tournament_id", t.id).order("created_at");
+    const min = t.format === "hybrid_elimination" ? 6 : (t.format === "group_playoffs" || t.format === "double_elimination") ? 4 : 2;
     if (!teams || teams.length < min) throw new Error(`Minimal ${min} tim harus terdaftar di turnamen ini (menu Teams).`);
-    if (t.format === "double_elimination" && !isPow2(teams.length)) throw new Error(`Double Elimination butuh jumlah tim tepat 4, 8, 16, atau 32 (sekarang ${teams.length}). Pakai Hybrid Elimination kalau jumlah timnya gak pas pangkat 2.`);
+    if (t.format === "double_elimination" && !isPow2(teams.length)) throw new Error(`Double Elimination butuh jumlah tim tepat 4, 8, 16, atau 32 (sekarang ${teams.length}). Pakai Single Elimination atau Group Stage + Playoffs kalau jumlah timnya gak pas pangkat 2.`);
     const { count } = await sb.from("matches").select("id", { count: "exact", head: true }).eq("tournament_id", t.id);
     if (count && !confirm("Jadwal/bracket sudah ada. Generate ulang akan menghapus semua match & skor. Lanjut?")) return;
-    const shuffle = confirm(`${teams.length} tim. OK = acak seed/undian, Cancel = urut pendaftaran.`);
-    const ids = teams.map(x => x.id); if (shuffle) ids.sort(() => Math.random() - .5);
+    const hybrid = t.format === "hybrid_elimination";
+    const shuffle = hybrid ? false : confirm(`${teams.length} tim. OK = acak seed/undian, Cancel = urut pendaftaran.`);
+    let ids = teams.map(x => x.id); if (shuffle) ids.sort(() => Math.random() - .5);
     let rows;
     if (t.format === "round_robin" || t.format === "group_playoffs") {
       const bo = +prompt("Best of untuk fase liga/grup (1, 2, atau 3)?\nBo2: seri 1:1 boleh (1 poin).", "2");
@@ -119,12 +120,13 @@
         rows = B.buildGroups(ids, g, bo);
       }
     } else if (t.format === "double_elimination") rows = B.buildDoubleElim(ids);
-    else if (t.format === "hybrid_elimination") {
-      if (ids.length % 3 !== 0) throw new Error(`Hybrid Elimination butuh total tim kelipatan 3 (2 BYE+4 play-in, 4 BYE+8 play-in, dst). Sekarang ${ids.length} tim.`);
-      const byeCount = ids.length / 3;
-      if (!isPow2(byeCount) || byeCount < 2) throw new Error(`Jumlah tim BYE hasil hitungan (${byeCount}) harus pangkat 2 (2, 4, 8). Sesuaikan jumlah tim terdaftar jadi 6, 12, atau 24 tim.`);
-      if (!confirm(`${byeCount} tim urutan teratas (seed/undian di atas) lolos BYE ke Winners Bracket, ${ids.length - byeCount} sisanya main Play-In dulu. Lanjut?`)) return;
-      rows = B.buildHybridElim(ids, byeCount);
+    else if (hybrid) {
+      // Seed 1 & 2 (urutan pendaftaran di menu Teams) langsung masuk Upper Bracket (M3/M4). 4 tim berikutnya diacak ke Play-In M1 & M2.
+      const nm = (i) => teams[i].name || "?";
+      const out = teams.slice(6).map(x => x.name).join(", ");
+      if (!confirm(`Playoff 6 tim (format MPL):\n• Seed 1: ${nm(0)} → Upper Bracket (M3)\n• Seed 2: ${nm(1)} → Upper Bracket (M4)\n• 4 tim lain diacak ke M1 & M2: ${teams.slice(2, 6).map(x => x.name).join(", ")}${out ? `\n\nTidak ikut playoff (di luar 6 teratas): ${out}` : ""}\n\nLanjut?`)) return;
+      const rest = ids.slice(2, 6); for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+      rows = B.buildHybridElim([ids[0], ids[1], ...rest]);
     } else rows = B.buildBracket(ids);
     rows = rows.map(m => ({ ...m, tournament_id: t.id }));
     await sb.from("matches").delete().eq("tournament_id", t.id);
@@ -199,11 +201,11 @@
     const byRound = {}; (ms || []).forEach(m => (byRound[(m._ko ? "1" : "0") + "|" + (m.bracket_side || "") + "|" + String(m.round).padStart(3, "0") + "|" + (m.group_name || "")] ||= []).push(m));
     const editableCount = (ms || []).filter(m => !m.is_bye && m.team1_id && m.team2_id).length;
     $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3><div style="display:flex;gap:8px">${editableCount ? '<button type="button" class="btn-primary sm" id="saveallm">SAVE ALL</button>' : ""}${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div></div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
-      ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (knockout: Final Bo5, Semi Final Bo3, lainnya Bo1; liga/grup sesuai Bo yang dipilih — Bo2 boleh seri).</small>` : ""}
+      ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (knockout: Final Bo5, Semi Final Bo3, lainnya Bo1; Hybrid MPL: Lower Final & Grand Final Bo7, lainnya Bo5; liga/grup sesuai Bo yang dipilih — Bo2 boleh seri).</small>` : ""}
       ${Object.keys(byRound).sort().map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
-        <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || "TBD")}</div>
+        <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || m._ph1 || "TBD")}</div>
         ${ok ? `<select class="sc2" name="sc">${ARES.scoreOpts(m)}</select>` : `<span class="m-st">—</span>`}
-        <div class="m-team r">${esc(m.team2?.name || (m.is_bye ? "BYE" : "TBD"))}</div>
+        <div class="m-team r">${esc(m.team2?.name || (m.is_bye ? "BYE" : m._ph2 || "TBD"))}</div>
         <span class="m-st">${esc(m._st.toUpperCase())}</span>
         <input type="datetime-local" name="when" value="${dtLocal(m.scheduled_at)}"><button class="btn-primary sm" data-save ${ok ? "" : "disabled"}>SAVE</button></div>`; }).join("")}`).join("") || '<div class="empty-state">Belum ada match. Buat bracket dari menu Tournaments.</div>'}</div>`;
     $("msel").onchange = (e) => { selT = e.target.value; renderMatches(); };

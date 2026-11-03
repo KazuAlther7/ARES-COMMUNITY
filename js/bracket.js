@@ -139,37 +139,45 @@
   // dgn rumus statis utk jumlah tim non-pangkat-2, jadi sengaja dibatasi daripada bracket jadi nyangkut.
   function buildDoubleElim(teamIds) {
     const n = teamIds.length;
-    if (n < 4 || (n & (n - 1)) !== 0) throw new Error("Double Elimination butuh jumlah tim tepat pangkat 2 (4, 8, 16, 32, ...). Pakai Hybrid Elimination kalau jumlah timnya gak pas.");
+    if (n < 4 || (n & (n - 1)) !== 0) throw new Error("Double Elimination butuh jumlah tim tepat pangkat 2 (4, 8, 16, 32, ...). Pakai Single Elimination atau Group Stage + Playoffs kalau jumlah timnya gak pas.");
     const order = seedOrder(n);
     const all = buildDEFromSeeds(n, (p) => ({ team1_id: teamIds[order[(p - 1) * 2] - 1] || null, team2_id: teamIds[order[(p - 1) * 2 + 1] - 1] || null }));
     propagateByes(all);
     return all;
   }
-  // Hybrid Elimination ala playoff MPL: `byeCount` seed teratas langsung BYE ke Winners Bracket (double elim),
-  // sisanya (harus tepat byeCount*2 tim) main Play-In single elimination berpasangan (seed terkuat vs terlemah)
-  // buat ngerebut sisa slot Winners Bracket. byeCount wajib pangkat 2 (2, 4, 8, ...).
-  function buildHybridElim(seedIds, byeCount) {
-    if (!(byeCount >= 2 && (byeCount & (byeCount - 1)) === 0)) throw new Error("Jumlah tim BYE harus pangkat 2 dan minimal 2 (2, 4, 8, ...)");
-    const byeSeeds = seedIds.slice(0, byeCount), playinSeeds = seedIds.slice(byeCount);
-    if (playinSeeds.length !== byeCount * 2) throw new Error(`Hybrid Elimination butuh tepat ${byeCount * 3} tim (${byeCount} BYE + ${byeCount * 2} play-in). Saat ini ${seedIds.length} tim.`);
-    const playin = [];
-    for (let i = 0; i < byeCount; i++) playin.push({
+  // Hybrid Elimination = format Playoff MPL, tepat 6 tim (urutan seedIds = seed 1..6):
+  //   M1, M2 (Play-In)        : 4 tim sisanya (seed 3-6, urutan di sini = hasil acak dari admin) main berpasangan
+  //   M3, M4 (Upper Bracket)  : seed 1 vs pemenang M1, seed 2 vs pemenang M2
+  //   M5     (Lower Bracket)  : kalah M3 vs kalah M4
+  //   M6     (Upper Final)    : menang M3 vs menang M4
+  //   M7     (Lower Final)    : menang M5 vs kalah M6
+  //   M8     (Grand Final)    : menang M6 vs menang M7
+  // Bo: Lower Final & Grand Final Bo7, sisanya Bo5. Struktur data = double elim 4 tim + Play-In (side playin/winners/losers/final).
+  function buildHybridElim(seedIds) {
+    if (seedIds.length !== 6) throw new Error(`Hybrid Elimination (ala Playoff MPL) butuh tepat 6 tim, sekarang ${seedIds.length}.`);
+    const playin = [0, 1].map(i => ({
       round: 1, position: i + 1, round_name: "Play-In", bracket_side: "playin",
-      team1_id: playinSeeds[i] || null, team2_id: playinSeeds[playinSeeds.length - 1 - i] || null,
+      team1_id: seedIds[2 + i * 2], team2_id: seedIds[3 + i * 2],
       score1: 0, score2: 0, best_of: 5, winner_id: null, status: "scheduled", is_bye: false,
       winner_to: { side: "winners", round: 1, position: i + 1, slot: 2 }, loser_to: null
-    });
-    const main = buildDEFromSeeds(byeCount * 2, (p) => ({ team1_id: byeSeeds[p - 1] || null, team2_id: null }));
-    const all = [...playin, ...main];
-    propagateByes(all);
-    return all;
+    }));
+    const main = buildDEFromSeeds(4, (p) => ({ team1_id: seedIds[p - 1], team2_id: null }));
+    main.forEach(m => { m.best_of = 5; });
+    main.find(m => m.bracket_side === "losers" && m.round === 2).best_of = 7; // Lower Final
+    main.find(m => m.bracket_side === "final").best_of = 7;                   // Grand Final
+    return [...playin, ...main];
   }
   // Nomor match, Bo, dan status turunan (ikut status turnamen). tstat: string atau fn(match).
   function annotate(ms, tstat) {
     const by = {};
     ms.forEach(m => (by[m.tournament_id] ||= []).push(m));
     Object.values(by).forEach(list => {
-      const ko = list.filter(isKO).sort((a, b) => (a.bracket_side || "").localeCompare(b.bracket_side || "") || a.round - b.round || a.position - b.position);
+      const ko = list.filter(isKO);
+      // Hybrid (ada Play-In): nomor match urut sesuai alur main — M1-M2 Play-In, M3-M4 Upper, M5 Lower, M6 Upper Final, M7 Lower Final, M8 Grand Final.
+      const hy = ko.some(m => m.bracket_side === "playin");
+      const hyKey = (m) => m.bracket_side === "playin" ? 10 : m.bracket_side === "winners" ? (m.round + 1) * 10 + 1 : m.bracket_side === "losers" ? (m.round + 2) * 10 : 900;
+      ko.sort(hy ? (a, b) => hyKey(a) - hyKey(b) || a.position - b.position
+        : (a, b) => (a.bracket_side || "").localeCompare(b.bracket_side || "") || a.round - b.round || a.position - b.position);
       const lg = list.filter(m => !isKO(m)).sort((a, b) => a.round - b.round || (a.group_name || "").localeCompare(b.group_name || "") || a.position - b.position);
       let n = 0;
       const now = Date.now();
@@ -181,6 +189,14 @@
         const timeLive = m.scheduled_at && new Date(m.scheduled_at).getTime() <= now; // sudah lewat jam jadwal
         m._st = (m.status === "completed" || m.winner_id) ? "completed" : (m.team1_id && m.team2_id && (ts === "live" || timeLive) ? "live" : "scheduled");
       });
+      // Slot yg belum terisi → keterangan asalnya, mis. "WINNER M1" / "LOSER M4" (BYE asli tetap kosong → "BYE").
+      const fed = fedSlots(ko);
+      ko.forEach(m => [1, 2].forEach(sl => {
+        m["_ph" + sl] = null;
+        if (m["team" + sl + "_id"]) return;
+        const src = (fed[slotKey(m.bracket_side, m.round, m.position, sl)] || []).filter(x => aliveSource(x) && x.m._no);
+        if (src.length) m["_ph" + sl] = src.map(x => (x.kind === "winner" ? "WINNER M" : "LOSER M") + x.m._no).join(" / ");
+      }));
     });
     return ms;
   }
