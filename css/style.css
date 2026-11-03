@@ -217,3 +217,20 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 .sd-tag.up{color:var(--gold);border-color:#57452d}.sd-tag.pi{color:#9ab;border-color:#34383c}.sd-tag.out{color:#777;border-color:#34383c}
 .sd-chk{display:flex;align-items:center;gap:8px;margin:14px 0 0;color:#ccc;font-size:12px}.sd-chk input{width:auto;margin:0}
 .sd-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+
+/* game chip, checkbox di form admin, juara 3, predictions */
+.tag.game-tag{background:#1d1a12;color:var(--gold);border-color:#57452d}
+.a-card label.chk{display:flex;align-items:center;gap:8px;color:#ccc;font-size:12px;letter-spacing:0}.a-card .chk input{width:auto!important;margin:0!important;padding:0!important}
+.third-wrap{margin-top:36px;width:250px}.third-wrap[hidden]{display:none}.third-card .b-item{min-height:0;padding:0 0 8px;display:block}
+.pred-block{margin-bottom:34px}.pred-block h3{font:900 24px 'Barlow Condensed';letter-spacing:1px;margin:0 0 12px}.pred-block h3 a{color:#fff}.pred-block h3 small{color:var(--gold);font:800 10px Inter;letter-spacing:1.5px;margin-left:8px}
+.pred-total{font:800 10px Inter;letter-spacing:2px;color:var(--gold);margin-bottom:10px}
+.pred-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.pred-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#141619;border:1px solid var(--line);color:#cfd2d5;cursor:pointer;text-align:left;font:700 13px Inter}
+.pred-opt:disabled{cursor:default}.pred-opt:not(:disabled):hover{border-color:#57452d}
+.pred-opt.sel{border-color:var(--gold);background:#1d1a12;color:var(--gold)}.pred-opt.champ{border-color:var(--gold);box-shadow:0 0 18px #d7ad6240}
+.pred-opt .pn{flex:0 1 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pbar{flex:1;height:6px;background:#0c0e10;min-width:40px}.pbar i{display:block;height:100%;background:var(--gold)}
+.pred-opt b{font:800 11px Inter;color:#999;white-space:nowrap}
+.pred-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pred-form input{flex:1;min-width:180px;max-width:320px;padding:11px;background:#0c0e10;border:1px solid #34383c;color:#fff;font-size:13px}
+.pred-form button{background:var(--red);color:#fff;border:0;padding:11px 18px;font:800 11px Inter;letter-spacing:1px;cursor:pointer}.pred-form button:disabled{opacity:.5}
+.pred-adm{margin-top:14px;font-size:12px;color:#aaa}.pred-adm summary{cursor:pointer;color:#ff8a91;font:800 10px Inter;letter-spacing:1.5px}.pred-adm div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}.pred-adm button{background:none;border:0;color:#ff8a91;cursor:pointer}
