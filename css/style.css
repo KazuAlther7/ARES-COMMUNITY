@@ -192,3 +192,12 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 .t-pill span{color:#777;font-size:9px}
 .t-pill.active{border-color:var(--gold);color:var(--gold);background:#1c1810}
 .t-filter-hint{color:#777;font-size:11px;margin-bottom:14px}
+
+/* admin: combo (ketik + pilih cepat), kotak auto-jadwal */
+.combo{display:flex;gap:6px}.combo input{flex:1;min-width:0}.combo select{width:92px;flex:none}
+.sched-box{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:16px 0 4px;padding:12px 14px;border:1px dashed #57452d;background:#15130e}
+.sched-box strong{flex-basis:100%;font-size:10px;letter-spacing:2px;color:var(--gold)}.sched-box label{margin:0!important;min-width:150px}.sched-box small{flex-basis:100%;color:#888}
+.sched-box .chk{display:flex;align-items:center;gap:6px;min-width:0}.sched-box .chk input{width:auto;margin:0}
+/* highlight jalur tim */
+.hl-on .b-match.dim{opacity:.28}.hl-on .b-match.hl{border-color:var(--gold);box-shadow:0 0 18px #d7ad6255}
+.slot.hl-slot{background:#2a2112!important;color:var(--gold)}
