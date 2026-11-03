@@ -2,7 +2,8 @@
   const { client: sb, esc, uploadImage } = window.ARES;
   const $ = (id) => document.getElementById(id);
   const ROLE_LIST = ["EXP", "Gold", "Mid", "Jungler", "Roamer"];
-  const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination", round_robin: "Round Robin (klasemen liga)", group_playoffs: "Group Stage + Playoffs" };
+  const FORMATS = { single_elimination: "Single Elimination", double_elimination: "Double Elimination (tim harus tepat 4/8/16/32)", round_robin: "Round Robin (klasemen liga)", group_playoffs: "Group Stage + Playoffs", hybrid_elimination: "Hybrid Elimination (ala Playoff MPL)" };
+  const isPow2 = (n) => n > 0 && (n & (n - 1)) === 0;
   let tab = "tournaments", tournaments = [], selT = "";
 
   const fmtErr = (e) => [e?.message, e?.details, e?.hint, e?.code && `(${e.code})`].filter(Boolean).join(" — ") || String(e);
@@ -100,8 +101,9 @@
   async function generateBracket(t) {
     const B = ARES_BRACKET;
     const { data: teams } = await sb.from("teams").select("id").eq("tournament_id", t.id).order("created_at");
-    const min = t.format === "group_playoffs" ? 4 : t.format === "double_elimination" ? 4 : 2;
+    const min = t.format === "group_playoffs" ? 4 : (t.format === "double_elimination" || t.format === "hybrid_elimination") ? 4 : 2;
     if (!teams || teams.length < min) throw new Error(`Minimal ${min} tim harus terdaftar di turnamen ini (menu Teams).`);
+    if (t.format === "double_elimination" && !isPow2(teams.length)) throw new Error(`Double Elimination butuh jumlah tim tepat 4, 8, 16, atau 32 (sekarang ${teams.length}). Pakai Hybrid Elimination kalau jumlah timnya gak pas pangkat 2.`);
     const { count } = await sb.from("matches").select("id", { count: "exact", head: true }).eq("tournament_id", t.id);
     if (count && !confirm("Jadwal/bracket sudah ada. Generate ulang akan menghapus semua match & skor. Lanjut?")) return;
     const shuffle = confirm(`${teams.length} tim. OK = acak seed/undian, Cancel = urut pendaftaran.`);
@@ -117,7 +119,13 @@
         rows = B.buildGroups(ids, g, bo);
       }
     } else if (t.format === "double_elimination") rows = B.buildDoubleElim(ids);
-    else rows = B.buildBracket(ids);
+    else if (t.format === "hybrid_elimination") {
+      if (ids.length % 3 !== 0) throw new Error(`Hybrid Elimination butuh total tim kelipatan 3 (2 BYE+4 play-in, 4 BYE+8 play-in, dst). Sekarang ${ids.length} tim.`);
+      const byeCount = ids.length / 3;
+      if (!isPow2(byeCount) || byeCount < 2) throw new Error(`Jumlah tim BYE hasil hitungan (${byeCount}) harus pangkat 2 (2, 4, 8). Sesuaikan jumlah tim terdaftar jadi 6, 12, atau 24 tim.`);
+      if (!confirm(`${byeCount} tim urutan teratas (seed/undian di atas) lolos BYE ke Winners Bracket, ${ids.length - byeCount} sisanya main Play-In dulu. Lanjut?`)) return;
+      rows = B.buildHybridElim(ids, byeCount);
+    } else rows = B.buildBracket(ids);
     rows = rows.map(m => ({ ...m, tournament_id: t.id }));
     await sb.from("matches").delete().eq("tournament_id", t.id);
     const { error } = await sb.from("matches").insert(rows); if (error) throw error;

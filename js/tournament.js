@@ -100,6 +100,7 @@
   };
   // Double elimination: Winners Bracket + Losers Bracket ditampilkan sebagai dua baris terpisah, lalu Grand Final + Champion.
   function renderDoubleElim(t, ms, A) {
+    const pin = ms.filter(m => m.bracket_side === "playin").sort((a, b) => a.position - b.position);
     const wb = ms.filter(m => m.bracket_side === "winners").sort((a, b) => a.round - b.round || a.position - b.position);
     const lb = ms.filter(m => m.bracket_side === "losers").sort((a, b) => a.round - b.round || a.position - b.position);
     const gf = ms.find(m => m.bracket_side === "final");
@@ -109,7 +110,9 @@
       const keys = Object.keys(rounds).sort((a, b) => a - b);
       return `<div class="eyebrow" style="margin:0 0 10px">${label}</div><div class="bracket${A.admin.on ? " adm" : ""}">${keys.map(r => `<div class="b-round"><div class="b-title">${esc(rounds[r][0].round_name)} <small>BO${rounds[r][0]._bo}</small></div><div class="b-matches">${rounds[r].map(m => bItem(m, A, false)).join("")}</div></div>`).join("")}</div>`;
     };
-    let html = `<div class="de-row">${rowHtml(wb, "WINNERS BRACKET")}</div>`;
+    let html = "";
+    if (pin.length) html += `<div class="de-row">${rowHtml(pin, "PLAY-IN")}</div>`;
+    html += `<div class="de-row" ${pin.length ? 'style="margin-top:36px"' : ""}>${rowHtml(wb, "WINNERS BRACKET")}</div>`;
     if (lb.length) html += `<div class="de-row" style="margin-top:36px">${rowHtml(lb, "LOSERS BRACKET")}</div>`;
     if (gf) html += `<div class="de-row" style="margin-top:36px"><div class="eyebrow" style="margin:0 0 10px">GRAND FINAL</div><div class="bracket${A.admin.on ? " adm" : ""}"><div class="b-round"><div class="b-title">Grand Final <small>BO${gf._bo}</small></div><div class="b-matches">${bItem(gf, A, false)}</div></div>${champCol(gf)}</div></div>`;
     return html;
@@ -138,7 +141,7 @@
     const useScorePanel = t.format === "round_robin" || t.format === "group_playoffs";
     renderLeague(t, lg, teams || []);
     renderScorePanel(t, ms || []);
-    const isDE = t.format === "double_elimination";
+    const isDE = t.format === "double_elimination" || t.format === "hybrid_elimination";
     $("t-bracket-sec").hidden = !ko.length && !isDE && t.format !== "single_elimination";
     $("t-bracket-h").innerHTML = (lg.length ? "PLAYOFFS" : "BRACKET") + "<span>.</span>";
     $("t-live").textContent = (ms || []).some(m => m._st === "live") ? "● LIVE NOW" : "";

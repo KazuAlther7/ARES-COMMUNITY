@@ -126,10 +126,12 @@
       if (po.length) await client.from("matches").delete().in("id", po.map(x => x.id));
       ms = ms.filter(m => m.stage !== "playoff");
     }
+    const sources = B.fedSlots(ms), sk = (m, slot) => `${m.bracket_side || ""}:${m.round}-${m.position}#${slot}`;
     const st = ms.map(m => {
-      const ko = B.isKO(m), isSeedRound = ko && (m.bracket_side === "winners" || !m.bracket_side) && m.round === 1;
+      const ko = B.isKO(m);
+      const keep1 = !ko || !(sources[sk(m, 1)] || []).length, keep2 = !ko || !(sources[sk(m, 2)] || []).length;
       return { id: m.id, round: m.round, position: m.position, bracket_side: m.bracket_side || null,
-        team1_id: !ko || isSeedRound ? m.team1_id : null, team2_id: !ko || isSeedRound ? m.team2_id : null,
+        team1_id: keep1 ? m.team1_id : null, team2_id: keep2 ? m.team2_id : null,
         winner_id: null, status: "scheduled", is_bye: false, winner_to: m.winner_to, loser_to: m.loser_to };
     });
     B.propagateByes(st); // isi ulang BYE yg auto-lanjut (termasuk rantai WB→LB di double elim); match liga/grup otomatis gak kesentuh (winner_to kosong)

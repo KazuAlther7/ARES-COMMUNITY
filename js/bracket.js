@@ -26,18 +26,36 @@
     }
     return o.sort((x, y) => (x[0] + x[1]) - (y[0] + y[1]) || y[0] - x[0]);
   }
-  // Jalanin otomatis kemenangan BYE lewat rute winner_to ({side,round,position,slot}) sampai mentok.
-  // Dipakai pas generate bracket (single & double elim) maupun reset skor (re-isi BYE tanpa ubah struktur).
+  const slotKey = (side, r, p, slot) => `${side || ""}:${r}-${p}#${slot}`;
+  // Daftar match yg jadi "sumber" tiap slot (lewat winner_to/loser_to) — dipakai bedain slot yg emang gak akan
+  // pernah terisi (BYE asli) vs yg masih nunggu match lain. Sumber loser_to jadi mati kalau match asalnya
+  // sendiri ternyata BYE (gak ada yg kalah di situ) — makanya dicek pake `alive`, bukan sekadar ada/gaknya rute.
+  function fedSlots(all) {
+    const map = {};
+    all.forEach(m => {
+      if (m.winner_to) (map[slotKey(m.winner_to.side, m.winner_to.round, m.winner_to.position, m.winner_to.slot)] ||= []).push({ m, kind: "winner" });
+      if (m.loser_to) (map[slotKey(m.loser_to.side, m.loser_to.round, m.loser_to.position, m.loser_to.slot)] ||= []).push({ m, kind: "loser" });
+    });
+    return map;
+  }
+  const aliveSource = (src) => src.kind === "winner" || !(src.m.winner_id && src.m.is_bye); // menang: cepat/lambat pasti ada. kalah: mati kalau sumbernya BYE (gak ada yg kalah)
+  // Jalanin otomatis kemenangan BYE lewat rute winner_to ({side,round,position,slot}) sampai mentok, termasuk
+  // efek berantai: slot yg nunggu "yg kalah" dari match yg ternyata BYE ikut jadi BYE juga (gak ada yg pernah datang).
   function propagateByes(all) {
     const key = (side, r, p) => `${side || ""}:${r}-${p}`;
     const byKey = {}; all.forEach(m => byKey[key(m.bracket_side, m.round, m.position)] = m);
+    const sources = fedSlots(all);
     let changed = true;
     while (changed) {
       changed = false;
       all.forEach(m => {
         if (m.winner_id || !m.winner_to) return;
         const hasA = !!m.team1_id, hasB = !!m.team2_id;
-        if (hasA && !hasB) m.winner_id = m.team1_id; else if (hasB && !hasA) m.winner_id = m.team2_id; else return;
+        const bAlive = !hasB && (sources[slotKey(m.bracket_side, m.round, m.position, 2)] || []).some(aliveSource);
+        const aAlive = !hasA && (sources[slotKey(m.bracket_side, m.round, m.position, 1)] || []).some(aliveSource);
+        if (hasA && !hasB && !bAlive) m.winner_id = m.team1_id;
+        else if (hasB && !hasA && !aAlive) m.winner_id = m.team2_id;
+        else return;
         m.is_bye = true; m.status = "completed";
         const t = m.winner_to, target = byKey[key(t.side, t.round, t.position)];
         if (target) { target[t.slot === 1 ? "team1_id" : "team2_id"] = m.winner_id; changed = true; }
@@ -67,14 +85,10 @@
     propagateByes(all);
     return all;
   }
-  // Double elimination standar (tanpa bracket reset di grand final — pemenang grand final langsung juara).
-  // Minimal 4 tim. Ukuran bracket dibulatkan ke pangkat 2 terdekat (sisanya BYE di Winners Bracket ronde 1).
-  function buildDoubleElim(teamIds) {
-    const n = teamIds.length;
-    if (n < 4) throw new Error("Minimal 4 tim untuk Double Elimination");
-    let size = 2; while (size < n) size *= 2;
+  // Bangun WB(ronde2+)+LB+GF generik dari susunan WB ronde 1 (seedFn(position)->{team1_id,team2_id}).
+  // size wajib pangkat 2 (>=4). Dipakai buildDoubleElim (seed biasa) & buildHybridElim (WB ronde1 = BYE-seed vs pemenang play-in).
+  function buildDEFromSeeds(size, seedFn) {
     const k = Math.log2(size);
-    const order = seedOrder(size);
     const wb = [];
     for (let r = 1; r <= k; r++) {
       const cnt = size / Math.pow(2, r), arr = [];
@@ -86,7 +100,7 @@
       });
       wb.push(arr);
     }
-    wb[0].forEach((m, i) => { m.team1_id = teamIds[order[i * 2] - 1] || null; m.team2_id = teamIds[order[i * 2 + 1] - 1] || null; });
+    wb[0].forEach((m, i) => { const s = seedFn(i + 1) || {}; m.team1_id = s.team1_id || null; m.team2_id = s.team2_id || null; });
 
     const mkLB = (round, position) => ({
       round, position, round_name: "Losers · Round " + round, bracket_side: "losers",
@@ -118,8 +132,35 @@
       team1_id: null, team2_id: null, score1: 0, score2: 0, best_of: 5, winner_id: null, status: "scheduled", is_bye: false,
       winner_to: null, loser_to: null
     };
-
-    const all = [...wb.flat(), ...L.flat(), gf];
+    return [...wb.flat(), ...L.flat(), gf];
+  }
+  // Double elimination standar (tanpa bracket reset di grand final — pemenang grand final langsung juara).
+  // Wajib tepat pangkat 2 (4, 8, 16, 32, ...) — campuran BYE di Losers Bracket gak bisa dijamin selalu tepat
+  // dgn rumus statis utk jumlah tim non-pangkat-2, jadi sengaja dibatasi daripada bracket jadi nyangkut.
+  function buildDoubleElim(teamIds) {
+    const n = teamIds.length;
+    if (n < 4 || (n & (n - 1)) !== 0) throw new Error("Double Elimination butuh jumlah tim tepat pangkat 2 (4, 8, 16, 32, ...). Pakai Hybrid Elimination kalau jumlah timnya gak pas.");
+    const order = seedOrder(n);
+    const all = buildDEFromSeeds(n, (p) => ({ team1_id: teamIds[order[(p - 1) * 2] - 1] || null, team2_id: teamIds[order[(p - 1) * 2 + 1] - 1] || null }));
+    propagateByes(all);
+    return all;
+  }
+  // Hybrid Elimination ala playoff MPL: `byeCount` seed teratas langsung BYE ke Winners Bracket (double elim),
+  // sisanya (harus tepat byeCount*2 tim) main Play-In single elimination berpasangan (seed terkuat vs terlemah)
+  // buat ngerebut sisa slot Winners Bracket. byeCount wajib pangkat 2 (2, 4, 8, ...).
+  function buildHybridElim(seedIds, byeCount) {
+    if (!(byeCount >= 2 && (byeCount & (byeCount - 1)) === 0)) throw new Error("Jumlah tim BYE harus pangkat 2 dan minimal 2 (2, 4, 8, ...)");
+    const byeSeeds = seedIds.slice(0, byeCount), playinSeeds = seedIds.slice(byeCount);
+    if (playinSeeds.length !== byeCount * 2) throw new Error(`Hybrid Elimination butuh tepat ${byeCount * 3} tim (${byeCount} BYE + ${byeCount * 2} play-in). Saat ini ${seedIds.length} tim.`);
+    const playin = [];
+    for (let i = 0; i < byeCount; i++) playin.push({
+      round: 1, position: i + 1, round_name: "Play-In", bracket_side: "playin",
+      team1_id: playinSeeds[i] || null, team2_id: playinSeeds[playinSeeds.length - 1 - i] || null,
+      score1: 0, score2: 0, best_of: 5, winner_id: null, status: "scheduled", is_bye: false,
+      winner_to: { side: "winners", round: 1, position: i + 1, slot: 2 }, loser_to: null
+    });
+    const main = buildDEFromSeeds(byeCount * 2, (p) => ({ team1_id: byeSeeds[p - 1] || null, team2_id: null }));
+    const all = [...playin, ...main];
     propagateByes(all);
     return all;
   }
@@ -183,6 +224,6 @@
     return groups.flatMap((gi, k) => buildLeague(gi, bo, { stage: "group", group: "Group " + String.fromCharCode(65 + k) }));
   }
   const buildPlayoffs = (seedIds) => buildBracket(seedIds).map(m => ({ ...m, stage: "playoff", group_name: null }));
-  const api = { buildBracket, buildDoubleElim, seedOrder, roundName, bestOf, scoreOptions, annotate, isKO, isDone, winsNeeded, standings, roundRobin, buildLeague, buildGroups, buildPlayoffs, propagateByes };
+  const api = { buildBracket, buildDoubleElim, buildHybridElim, seedOrder, roundName, bestOf, scoreOptions, annotate, isKO, isDone, winsNeeded, standings, roundRobin, buildLeague, buildGroups, buildPlayoffs, propagateByes, fedSlots };
   if (typeof module !== "undefined") module.exports = api; else root.ARES_BRACKET = api;
 })(typeof window !== "undefined" ? window : globalThis);
