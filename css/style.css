@@ -201,3 +201,19 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 /* highlight jalur tim */
 .hl-on .b-match.dim{opacity:.28}.hl-on .b-match.hl{border-color:var(--gold);box-shadow:0 0 18px #d7ad6255}
 .slot.hl-slot{background:#2a2112!important;color:var(--gold)}
+
+/* [hidden] harus menang atas display:grid/block milik form */
+.a-card [hidden]{display:none!important}
+/* menu seeding */
+.seed-modal{width:min(560px,100%)}.seed-modal h3{margin:4px 0 8px;font:900 26px 'Barlow Condensed';letter-spacing:1px}
+.sd-hint{color:#999;font-size:12px;line-height:1.5;margin:0 0 12px}
+.sd-tools{display:flex;gap:8px;margin-bottom:12px}.sd-tools button{background:#0c0e10;border:1px solid #34383c;color:#ddd;padding:8px 12px;font:800 10px Inter;letter-spacing:1px;cursor:pointer}
+.sd-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.sd-list li{display:flex;align-items:center;gap:10px;padding:8px 10px;background:#0f1113;border:1px solid var(--line)}
+.sd-list li b{font:900 18px 'Barlow Condensed';color:var(--gold);width:24px}.sd-list li span{flex:1;font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sd-list li.out{opacity:.5}
+.sd-list li button{width:34px;height:34px;background:#1a1d20;border:1px solid #34383c;color:#fff;font-size:16px;cursor:pointer}.sd-list li button:disabled{opacity:.25;cursor:default}
+.sd-tag{font:800 8px Inter;letter-spacing:1.2px;font-style:normal;padding:3px 6px;border:1px solid}
+.sd-tag.up{color:var(--gold);border-color:#57452d}.sd-tag.pi{color:#9ab;border-color:#34383c}.sd-tag.out{color:#777;border-color:#34383c}
+.sd-chk{display:flex;align-items:center;gap:8px;margin:14px 0 0;color:#ccc;font-size:12px}.sd-chk input{width:auto;margin:0}
+.sd-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
