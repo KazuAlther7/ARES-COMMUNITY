@@ -107,6 +107,14 @@ a.match-card{color:inherit}a.match-card:hover{border-color:#57452d}
 
 .role-ico{display:block;object-fit:contain;filter:drop-shadow(0 0 6px #ffffff22)}
 .player-role .role-ico{width:28px;height:28px}
+
+/* hybrid elimination (ala playoff MPL): upper di atas, lower di bawah, nyambung ke grand final → champion */
+.hy{position:relative;display:grid;grid-template-columns:repeat(5,250px);column-gap:56px;row-gap:0;width:max-content;align-items:center}
+.hy .b-item{min-height:0;padding:10px 0;display:block;flex:none}
+.hy .b-title.lower{margin-top:28px}
+.hy-cell{min-width:0}.hy-cell.mid{align-self:center}
+.hy .champ-col{width:100%}
+.hy-line{position:absolute;background:#4a5056;pointer-events:none}
 /* champion */
 .b-round.to-champ .b-item:after{content:"";position:absolute;right:-28px;width:28px;top:50%;border-top:2px solid var(--lc)}
 .b-round.to-champ .b-item:before{display:none}
