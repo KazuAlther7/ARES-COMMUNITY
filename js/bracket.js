@@ -162,11 +162,11 @@
       winner_to: { side: "winners", round: 1, position: i + 1, slot: 2 }, loser_to: null
     }));
     const main = buildDEFromSeeds(4, (p) => ({ team1_id: seedIds[p - 1], team2_id: null }));
-    main.forEach(m => { m.best_of = 5; });
-    main.find(m => m.bracket_side === "losers" && m.round === 2).best_of = 7; // Lower Final
-    main.find(m => m.bracket_side === "final").best_of = 7;                   // Grand Final
+    main.forEach(m => { m.best_of = hybridBestOf(m); });
     return [...playin, ...main];
   }
+  // Bo Hybrid (Playoff MPL): Lower Final (M7) & Grand Final (M8) Bo7, sisanya Bo5.
+  const hybridBestOf = (m) => m.bracket_side === "final" || (m.bracket_side === "losers" && m.round === 2) ? 7 : 5;
   // Nomor match, Bo, dan status turunan (ikut status turnamen). tstat: string atau fn(match).
   function annotate(ms, tstat) {
     const by = {};
@@ -183,6 +183,7 @@
       const now = Date.now();
       [...lg, ...ko].forEach(m => {
         m._ko = isKO(m);
+        if (hy && m.bracket_side) m.best_of = hybridBestOf(m); // Hybrid: Bo selalu ikut aturan MPL, walau data lama di DB beda
         m._bo = m.best_of || 1; // trust nilai yg di-generate (formula round/maxR gak berlaku generik buat double elim)
         m._no = m.is_bye ? null : ++n;
         const ts = typeof tstat === "function" ? tstat(m) : tstat;

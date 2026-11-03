@@ -153,6 +153,15 @@
     };
     [["m1", "m3"], ["m2", "m4"], ["m3", "m6"], ["m4", "m6"], ["m5", "m7"], ["m6", "m8"], ["m7", "m8"], ["m8", "champ"]].forEach(([f, t]) => link(f, t));
   }
+  // Scroll mouse (roda vertikal) menggeser bracket ke samping; di ujung kiri/kanan halaman lanjut scroll biasa.
+  const bw = $("t-bracket-wrap");
+  if (bw) bw.addEventListener("wheel", (e) => {
+    const dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (!dx || bw.scrollWidth <= bw.clientWidth) return;
+    const max = bw.scrollWidth - bw.clientWidth;
+    if ((dx < 0 && bw.scrollLeft <= 0) || (dx > 0 && bw.scrollLeft >= max - 1)) return;
+    e.preventDefault(); bw.scrollLeft += dx;
+  }, { passive: false });
   window.addEventListener("resize", drawHybridLines);
   if (window.ResizeObserver) new ResizeObserver(drawHybridLines).observe($("bracket"));
   async function load() {
