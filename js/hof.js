@@ -27,7 +27,10 @@
     host.innerHTML = shown.length ? shown.map((e, i) => {
       if (e.wins.length !== prev) { rank = i + 1; prev = e.wins.length; }
       const hd = hidden.has(e.key);
-      return `<article class="hof-row r${Math.min(rank, 4)}${hd ? " is-hid" : ""}" data-hof="${e.team.id}"><div class="hof-rank">${rank}</div>${logo(e.team, "lg")}<div class="hof-main"><h3>${esc(e.team.name)}${hd ? ' <small>· DISEMBUNYIKAN</small>' : ""}</h3></div><div class="hof-count"><b><i class="ico ico-trophy"></i> ${e.wins.length}</b><small>TROPHY</small></div>${A.admin.on ? `<button type="button" class="hof-hide" data-hhide="${esc(e.key)}" data-state="${hd ? 1 : 0}">${hd ? "TAMPILKAN" : "SEMBUNYIKAN"}</button>` : ""}</article>`;
+      const n = e.wins.length, lg = e.team.logo_url, last = e.last ? new Date(e.last).toLocaleDateString("id-ID", { month: "short", year: "numeric" }).toUpperCase() : "";
+      const title = n >= 5 ? "LEGEND" : n >= 3 ? "DYNASTY" : n === 2 ? "ELITE" : "CHAMPION";
+      const cups = '<i class="ico ico-trophy"></i>'.repeat(Math.min(n, 6)) + (n > 6 ? `<em>+${n - 6}</em>` : "");
+      return `<article class="hof-row r${Math.min(rank, 4)}${hd ? " is-hid" : ""}" data-hof="${e.team.id}">${lg ? `<img class="hof-bg" src="${esc(lg)}" alt="">` : '<i class="ico ico-trophy hof-bg-ico"></i>'}<div class="hof-rank">${rank}</div>${logo(e.team, "lg")}<div class="hof-main"><span class="hof-title">${title}</span><h3>${esc(e.team.name)}${hd ? ' <small>· DISEMBUNYIKAN</small>' : ""}</h3><div class="hof-cups">${cups}</div></div><div class="hof-count"><b>${n}</b><small><i class="ico ico-trophy"></i> ${n > 1 ? "TROPHIES" : "TROPHY"}</small>${last ? `<em>TERAKHIR JUARA · ${last}</em>` : ""}</div>${A.admin.on ? `<button type="button" class="hof-hide" data-hhide="${esc(e.key)}" data-state="${hd ? 1 : 0}">${hd ? "TAMPILKAN" : "SEMBUNYIKAN"}</button>` : ""}</article>`;
     }).join("") : '<div class="empty-state">Belum ada juara. Selesaikan turnamen untuk mengisi Hall of Fame.</div>';
   }
   host.addEventListener("click", async (e) => {
