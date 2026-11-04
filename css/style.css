@@ -234,3 +234,28 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 .pred-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.pred-form input{flex:1;min-width:180px;max-width:320px;padding:11px;background:#0c0e10;border:1px solid #34383c;color:#fff;font-size:13px}
 .pred-form button{background:var(--red);color:#fff;border:0;padding:11px 18px;font:800 11px Inter;letter-spacing:1px;cursor:pointer}.pred-form button:disabled{opacity:.5}
 .pred-adm{margin-top:14px;font-size:12px;color:#aaa}.pred-adm summary{cursor:pointer;color:#ff8a91;font:800 10px Inter;letter-spacing:1.5px}.pred-adm div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}.pred-adm button{background:none;border:0;color:#ff8a91;cursor:pointer}
+
+/* zoom bracket */
+#t-zsize{overflow:hidden}#t-zoom{width:max-content}.bracket-wrap.exporting{overflow:visible!important;width:max-content;padding:16px}
+.zoom-ctl{display:flex;gap:4px;margin-left:auto;margin-right:10px}.zoom-ctl button{background:#0c0e10;border:1px solid #34383c;color:#ddd;min-width:34px;height:34px;padding:0 8px;font:800 11px Inter;cursor:pointer}.zoom-ctl button:hover{border-color:#57452d;color:var(--gold)}
+@media(max-width:700px){.section-heading{flex-wrap:wrap;gap:10px}.zoom-ctl{margin-left:0}}
+/* profil tim (di modal roster) */
+.prof-btn{display:block;width:100%;margin-top:20px;padding:12px;background:#1d1a12;border:1px solid #57452d;color:var(--gold);font:800 11px Inter;letter-spacing:1.5px;cursor:pointer}.prof-btn:hover{background:#262013}
+.prof{margin-top:14px}.prof[hidden]{display:none}
+.prof-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.prof-stats div{background:#0f1113;border:1px solid var(--line);padding:10px 6px;text-align:center}
+.prof-stats b{display:block;font:900 22px 'Barlow Condensed';color:var(--gold)}.prof-stats small{font:700 8px Inter;letter-spacing:1px;color:#888}
+.prof-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:5px}.prof-list li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;background:#0f1113;border:1px solid var(--line);font-size:12px}
+.prof-list li span{min-width:0}.prof-list li i{color:#888;font-style:normal;font-size:10px;margin-left:4px}.prof-list li a{color:#fff;font-weight:700}.prof-list li em{font:800 10px Inter;font-style:normal;letter-spacing:1px;color:#aaa;white-space:nowrap}.prof-list li em.gold{color:var(--gold)}
+.res{display:inline-block;width:20px;text-align:center;font:900 11px Inter;margin-right:4px}.res.W{color:#3ddc84}.res.L{color:#ff6b73}.res.D{color:#aaa}
+@media(max-width:520px){.prof-stats{grid-template-columns:repeat(2,1fr)}}
+/* hall of fame */
+#hof-list{display:grid;gap:10px}
+.hof-row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:#141619;border:1px solid var(--line);cursor:pointer}.hof-row:hover{border-color:#57452d}
+.hof-rank{font:900 34px 'Barlow Condensed';width:42px;text-align:center;color:#666}
+.hof-row.r1{border-color:var(--gold);background:linear-gradient(90deg,#241d10,#141619)}.hof-row.r1 .hof-rank{color:var(--gold)}
+.hof-row.r2 .hof-rank{color:#c0c4c8}.hof-row.r3 .hof-rank{color:#c08a55}
+.hof-main{flex:1;min-width:0}.hof-main h3{margin:0 0 6px;font:900 24px 'Barlow Condensed';letter-spacing:1px;text-transform:uppercase}.hof-main h3 small{font:800 9px Inter;color:#ff8a91;letter-spacing:1px}
+.hof-chips{display:flex;flex-wrap:wrap;gap:6px}.hof-chips span{font:700 11px Inter;padding:4px 8px;background:#0f1113;border:1px solid #34383c;color:#ddd}.hof-chips i{font-style:normal;color:var(--gold);font-size:9px;margin-left:4px}
+.hof-count{text-align:center;min-width:64px}.hof-count b{display:block;font:900 38px 'Barlow Condensed';color:var(--gold);line-height:1}.hof-count small{font:800 8px Inter;letter-spacing:1.5px;color:#888}
+.hof-row.is-hid{opacity:.45}.hof-hide{background:none;border:1px solid #a33;color:#ff8a91;padding:7px 10px;font:800 9px Inter;letter-spacing:1px;cursor:pointer}
+@media(max-width:600px){.hof-row{flex-wrap:wrap}.hof-main{flex-basis:60%}.hof-rank{font-size:26px;width:30px}}
