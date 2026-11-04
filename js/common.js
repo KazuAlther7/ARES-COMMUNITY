@@ -56,16 +56,27 @@
     body.innerHTML = `<div class="roster-head">${logo(team, "xl")}<div><h3>${esc(team.name)}</h3>${team.tag ? `<p class="slogan">“${esc(team.tag)}”</p>` : ""}${team.tournaments?.name ? `<small>${esc(team.tournaments.name)}</small>` : ""}</div></div>
       <div class="eyebrow">STARTING ROSTER</div><ul class="roster">${main.map(row).join("") || '<li class="muted-li">Roster belum diisi.</li>'}</ul>
       ${subs.length ? `<div class="eyebrow" style="margin-top:18px">SUBSTITUTES</div><ul class="roster">${subs.map(row).join("")}</ul>` : ""}
-      <button type="button" class="prof-btn" data-prof>📊 PROFIL &amp; RIWAYAT TIM</button><div class="prof" id="prof-box" hidden></div>`;
+      <button type="button" class="prof-btn" data-prof><i class="ico ico-stats"></i> PROFIL &amp; RIWAYAT TIM</button><div class="prof" id="prof-box" hidden></div>`;
     // Profil tim: dibuka (dan dimuat) hanya saat tombol diklik. Tim yg sama di banyak turnamen = baris teams berbeda → digabung lewat nama.
     const pb = body.querySelector("[data-prof]"), box = body.querySelector("#prof-box");
     pb.onclick = async () => {
-      if (!box.hidden) { box.hidden = true; pb.innerHTML = "📊 PROFIL &amp; RIWAYAT TIM"; return; }
+      if (!box.hidden) { box.hidden = true; pb.innerHTML = '<i class="ico ico-stats"></i> PROFIL &amp; RIWAYAT TIM'; return; }
       box.hidden = false; pb.innerHTML = "▲ TUTUP PROFIL";
       if (!box.dataset.done) { box.innerHTML = '<div class="empty-state">Memuat profil<span class="loader"></span></div>'; try { box.innerHTML = await teamProfileHtml(team); box.dataset.done = "1"; } catch (err) { box.innerHTML = `<div class="empty-state">Gagal memuat profil: ${esc(err.message || err)}</div>`; } }
     };
   }
-  async function teamProfileHtml(team) {
+  // Hall of Fame: klik tim → hanya juara yang diraih + statistik (tanpa roster).
+  async function showTeamHof(team) {
+    document.querySelector(".modal-back")?.remove();
+    const back = document.createElement("div"); back.className = "modal-back";
+    back.innerHTML = `<div class="modal"><button class="modal-x" aria-label="Close">×</button><div class="roster-head">${logo(team, "xl")}<div><h3>${esc(team.name)}</h3><small>HALL OF FAME</small></div></div><div class="prof" style="margin-top:18px"><div class="empty-state">Memuat<span class="loader"></span></div></div></div>`;
+    document.body.appendChild(back);
+    back.addEventListener("click", e => { if (e.target === back) back.remove(); });
+    back.querySelector(".modal-x").onclick = () => back.remove();
+    const box = back.querySelector(".prof");
+    try { box.innerHTML = await teamProfileHtml(team, { hof: true }); } catch (err) { box.innerHTML = `<div class="empty-state">Gagal memuat: ${esc(err.message || err)}</div>`; }
+  }
+  async function teamProfileHtml(team, opts = {}) {
     const A = window.ARES, like = String(team.name || "").trim().replace(/[\\%_]/g, (c) => "\\" + c);
     const { data: rows, error } = await client.from("teams").select("id,tournaments(id,name,game,status,champion_id,is_hidden,start_date,created_at)").ilike("name", like);
     if (error) throw error;
@@ -85,18 +96,25 @@
       gf += +my || 0; ga += +op || 0;
       const t = (per[m.tournament_id] ||= { w: 0, l: 0 }); if (res === "W") t.w++; else if (res === "L") t.l++;
       return { res, my: +my || 0, op: +op || 0, opp, t: tById[m.tournament_id].name, rn: m.round_name || "", at: m.scheduled_at || "" };
-    }).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 8);
+    }).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
     const trophies = mine.filter(r => r.tournaments.champion_id === r.id).length, played = W + L + D;
     const tl = [...mine].sort((a, b) => String(b.tournaments.start_date || b.tournaments.created_at || "").localeCompare(String(a.tournaments.start_date || a.tournaments.created_at || "")));
-    return `<div class="prof-stats"><div><b>${W}-${L}${D ? "-" + D : ""}</b><small>MATCH W-L${D ? "-D" : ""}</small></div><div><b>${played ? Math.round(W * 100 / played) : 0}%</b><small>WIN RATE</small></div><div><b>${gf}-${ga}</b><small>GAME MENANG-KALAH</small></div><div><b>🏆 ${trophies}</b><small>TROPHY</small></div></div>
-      <div class="eyebrow" style="margin-top:16px">TURNAMEN DIIKUTI (${tl.length})</div>
-      <ul class="prof-list">${tl.map(r => { const t = r.tournaments, st = per[t.id] || { w: 0, l: 0 }, champ = t.champion_id === r.id; return `<li><span>${champ ? "🏆 " : ""}<a href="tournament.html?id=${t.id}">${esc(t.name)}</a>${t.game ? ` <i>${esc(t.game)}</i>` : ""}</span><em class="${champ ? "gold" : ""}">${champ ? "JUARA" : esc((t.status || "").toUpperCase())} · ${st.w}-${st.l}</em></li>`; }).join("")}</ul>
-      <div class="eyebrow" style="margin-top:16px">RIWAYAT MATCH TERAKHIR</div>
+    return `<div class="prof-stats"><div><b>${W}-${L}${D ? "-" + D : ""}</b><small>MATCH W-L${D ? "-D" : ""}</small></div><div><b>${played ? Math.round(W * 100 / played) : 0}%</b><small>WIN RATE</small></div><div><b>${gf}-${ga}</b><small>GAME MENANG-KALAH</small></div><div><b><i class="ico ico-trophy"></i> ${trophies}</b><small>TROPHY</small></div></div>
+      ${opts.hof ? `<div class="eyebrow" style="margin-top:16px">JUARA DIRAIH (${trophies})</div>
+      <ul class="prof-list">${tl.filter(r => r.tournaments.champion_id === r.id).map(r => { const t = r.tournaments; return `<li><span><i class="ico ico-trophy"></i> <a href="tournament.html?id=${t.id}">${esc(t.name)}</a>${t.game ? ` <i>${esc(t.game)}</i>` : ""}</span><em class="gold">JUARA</em></li>`; }).join("") || '<li class="muted-li">Belum ada.</li>'}</ul>`
+      : `<div class="eyebrow" style="margin-top:16px">TURNAMEN DIIKUTI (${tl.length})</div>
+      <ul class="prof-list">${tl.map(r => { const t = r.tournaments, st = per[t.id] || { w: 0, l: 0 }, champ = t.champion_id === r.id; return `<li><span>${champ ? '<i class="ico ico-trophy"></i> ' : ""}<a href="tournament.html?id=${t.id}">${esc(t.name)}</a>${t.game ? ` <i>${esc(t.game)}</i>` : ""}</span><em class="${champ ? "gold" : ""}">${champ ? "JUARA" : esc((t.status || "").toUpperCase())} · ${st.w}-${st.l}</em></li>`; }).join("")}</ul>`}
+      <div class="eyebrow" style="margin-top:16px">5 MATCH TERAKHIR</div>
       <ul class="prof-list">${hist.map(h => `<li><span><b class="res ${h.res}">${h.res}</b> vs ${esc(h.opp)} <i>${esc(h.t)}${h.rn ? " · " + esc(h.rn) : ""}</i></span><em>${h.my} : ${h.op}</em></li>`).join("") || '<li class="muted-li">Belum ada match selesai.</li>'}</ul>`;
   }
   document.addEventListener("click", e => {
     const el = e.target.closest("[data-team]");
     if (el && el.dataset.team) { e.preventDefault(); showTeam(el.dataset.team); }
+  });
+  // Menu navbar bisa di-scroll (geser jari / roda mouse); link aktif otomatis di tengah.
+  document.querySelectorAll(".topbar nav").forEach(n => {
+    n.addEventListener("wheel", (e) => { if (n.scrollWidth <= n.clientWidth) return; const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (!d) return; e.preventDefault(); n.scrollLeft += d; }, { passive: false });
+    const a = n.querySelector(".active"); if (a) n.scrollLeft = a.offsetLeft - (n.clientWidth - a.offsetWidth) / 2;
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelector(".modal-back")?.remove(); });
 
@@ -246,5 +264,5 @@
       }
     };
   }
-  window.ARES = { renderPredict, saveMatchResult, resetScores, generatePlayoffs, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
+  window.ARES = { showTeamHof, renderPredict, saveMatchResult, resetScores, generatePlayoffs, scoreOpts, annotate: (...a) => window.ARES_BRACKET.annotate(...a), admin: { is: false, on: false }, client, esc, money, ROLES, roleIcon, logo, uploadImage, showTeam };
 })();

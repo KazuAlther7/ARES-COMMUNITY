@@ -283,7 +283,7 @@
   async function saveMatch(m, el, silent) {
     const q = (n) => el.querySelector(`[name=${n}]`).value, [s1, s2] = q("sc").split("-").map(Number);
     const r = await ARES.saveMatchResult(m, s1, s2, fromLocal(q("when")));
-    if (!silent) { toast(r.winner && r.final ? "🏆 Juara ditetapkan" : r.done ? "Match selesai — pemenang lanjut ke babak berikutnya" : "Skor tersimpan"); renderMatches(); }
+    if (!silent) { toast(r.winner && r.final ? "Juara ditetapkan" : r.done ? "Match selesai — pemenang lanjut ke babak berikutnya" : "Skor tersimpan"); renderMatches(); }
   }
 
   init();

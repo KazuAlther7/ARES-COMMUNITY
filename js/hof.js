@@ -19,6 +19,7 @@
       e.wins.push({ name: t.name, game: t.game, at });
       if (at >= e.last) { e.last = at; e.team = team; }
     });
+    window.__hof = by;
     const all = Object.values(by).sort((a, b) => b.wins.length - a.wins.length || String(b.last).localeCompare(String(a.last)) || a.team.name.localeCompare(b.team.name));
     all.forEach(e => e.wins.sort((a, b) => String(b.at).localeCompare(String(a.at))));
     const shown = all.filter(e => A.admin.on || !hidden.has(e.key));
@@ -26,14 +27,16 @@
     host.innerHTML = shown.length ? shown.map((e, i) => {
       if (e.wins.length !== prev) { rank = i + 1; prev = e.wins.length; }
       const hd = hidden.has(e.key);
-      return `<article class="hof-row r${Math.min(rank, 4)}${hd ? " is-hid" : ""}" data-team="${e.team.id}"><div class="hof-rank">${rank}</div>${logo(e.team, "lg")}<div class="hof-main"><h3>${esc(e.team.name)}${hd ? ' <small>· DISEMBUNYIKAN</small>' : ""}</h3><div class="hof-chips">${e.wins.map(w => `<span>🏆 ${esc(w.name)}${w.game ? ` <i>${esc(w.game)}</i>` : ""}</span>`).join("")}</div></div><div class="hof-count"><b>${e.wins.length}</b><small>TROPHY</small></div>${A.admin.on ? `<button type="button" class="hof-hide" data-hhide="${esc(e.key)}" data-state="${hd ? 1 : 0}">${hd ? "TAMPILKAN" : "SEMBUNYIKAN"}</button>` : ""}</article>`;
+      return `<article class="hof-row r${Math.min(rank, 4)}${hd ? " is-hid" : ""}" data-hof="${e.team.id}"><div class="hof-rank">${rank}</div>${logo(e.team, "lg")}<div class="hof-main"><h3>${esc(e.team.name)}${hd ? ' <small>· DISEMBUNYIKAN</small>' : ""}</h3></div><div class="hof-count"><b><i class="ico ico-trophy"></i> ${e.wins.length}</b><small>TROPHY</small></div>${A.admin.on ? `<button type="button" class="hof-hide" data-hhide="${esc(e.key)}" data-state="${hd ? 1 : 0}">${hd ? "TAMPILKAN" : "SEMBUNYIKAN"}</button>` : ""}</article>`;
     }).join("") : '<div class="empty-state">Belum ada juara. Selesaikan turnamen untuk mengisi Hall of Fame.</div>';
   }
   host.addEventListener("click", async (e) => {
+    const row = e.target.closest("[data-hof]");
+    if (row && !e.target.closest("[data-hhide]")) { const ent = Object.values(window.__hof || {}).find(x => x.team.id === row.dataset.hof); if (ent) window.ARES.showTeamHof(ent.team); return; }
     const b = e.target.closest("[data-hhide]"); if (!b) return;
     e.stopPropagation(); b.disabled = true;
     const k = b.dataset.hhide, r = b.dataset.state === "1" ? await client.from("hall_hidden").delete().eq("name_key", k) : await client.from("hall_hidden").insert({ name_key: k });
-    if (r.error) alert(/hall_hidden|relation|schema cache/i.test(r.error.message || "") ? "Tabel hall_hidden belum ada. Jalankan supabase/update-hall-of-fame.sql di Supabase SQL Editor." : r.error.message);
+    if (r.error) { const m = r.error.message || "", c = r.error.code || ""; alert(c === "42P01" || c === "PGRST205" || /does not exist|schema cache/i.test(m) ? "Tabel hall_hidden belum ada. Jalankan supabase/update-hall-of-fame.sql di Supabase SQL Editor." : /row-level security|policy|permission/i.test(m) ? "Ditolak oleh RLS database. Jalankan supabase/fix-admin-policies.sql di Supabase SQL Editor.\n\n" + m : m); }
     load();
   });
   window.addEventListener("ares-admin", load);
