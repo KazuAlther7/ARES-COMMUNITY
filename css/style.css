@@ -259,3 +259,15 @@ button.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
 .hof-count{text-align:center;min-width:64px}.hof-count b{display:block;font:900 38px 'Barlow Condensed';color:var(--gold);line-height:1}.hof-count small{font:800 8px Inter;letter-spacing:1.5px;color:#888}
 .hof-row.is-hid{opacity:.45}.hof-hide{background:none;border:1px solid #a33;color:#ff8a91;padding:7px 10px;font:800 9px Inter;letter-spacing:1px;cursor:pointer}
 @media(max-width:600px){.hof-row{flex-wrap:wrap}.hof-main{flex-basis:60%}.hof-rank{font-size:26px;width:30px}}
+
+/* ikon (mask dari assets/icons, warna ikut teks) */
+.ico{display:inline-block;width:1.05em;height:1.05em;vertical-align:-.16em;background:currentColor}
+.ico-trophy{color:var(--gold);-webkit-mask:url(../assets/icons/trophy.png) center/contain no-repeat;mask:url(../assets/icons/trophy.png) center/contain no-repeat}
+.ico-stats{-webkit-mask:url(../assets/icons/stats.png) center/contain no-repeat;mask:url(../assets/icons/stats.png) center/contain no-repeat}
+.ico.bronze{color:#c08a55}
+.prof-btn .ico{margin-right:4px}.hof-count b .ico{width:.7em;height:.7em;vertical-align:-.04em}
+/* navbar bisa di-scroll */
+.topbar nav{flex:1 1 auto;min-width:0;overflow-x:auto;white-space:nowrap;scrollbar-width:none;margin:0 22px;padding:8px 2px;-webkit-overflow-scrolling:touch}
+.topbar nav::-webkit-scrollbar{display:none}.topbar nav a{flex:none}
+@media(max-width:850px){.topbar nav{margin:0 10px}}
+@media(max-width:600px){.topbar nav{order:3;flex:1 0 100%;width:100%;margin:0;justify-content:flex-start;gap:20px;padding:12px 0 2px}.topbar nav a{font-size:11px}}
