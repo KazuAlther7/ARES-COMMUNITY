@@ -55,7 +55,44 @@
     const main = (players || []).filter(p => !p.is_sub), subs = (players || []).filter(p => p.is_sub);
     body.innerHTML = `<div class="roster-head">${logo(team, "xl")}<div><h3>${esc(team.name)}</h3>${team.tag ? `<p class="slogan">“${esc(team.tag)}”</p>` : ""}${team.tournaments?.name ? `<small>${esc(team.tournaments.name)}</small>` : ""}</div></div>
       <div class="eyebrow">STARTING ROSTER</div><ul class="roster">${main.map(row).join("") || '<li class="muted-li">Roster belum diisi.</li>'}</ul>
-      ${subs.length ? `<div class="eyebrow" style="margin-top:18px">SUBSTITUTES</div><ul class="roster">${subs.map(row).join("")}</ul>` : ""}`;
+      ${subs.length ? `<div class="eyebrow" style="margin-top:18px">SUBSTITUTES</div><ul class="roster">${subs.map(row).join("")}</ul>` : ""}
+      <button type="button" class="prof-btn" data-prof>📊 PROFIL &amp; RIWAYAT TIM</button><div class="prof" id="prof-box" hidden></div>`;
+    // Profil tim: dibuka (dan dimuat) hanya saat tombol diklik. Tim yg sama di banyak turnamen = baris teams berbeda → digabung lewat nama.
+    const pb = body.querySelector("[data-prof]"), box = body.querySelector("#prof-box");
+    pb.onclick = async () => {
+      if (!box.hidden) { box.hidden = true; pb.innerHTML = "📊 PROFIL &amp; RIWAYAT TIM"; return; }
+      box.hidden = false; pb.innerHTML = "▲ TUTUP PROFIL";
+      if (!box.dataset.done) { box.innerHTML = '<div class="empty-state">Memuat profil<span class="loader"></span></div>'; try { box.innerHTML = await teamProfileHtml(team); box.dataset.done = "1"; } catch (err) { box.innerHTML = `<div class="empty-state">Gagal memuat profil: ${esc(err.message || err)}</div>`; } }
+    };
+  }
+  async function teamProfileHtml(team) {
+    const A = window.ARES, like = String(team.name || "").trim().replace(/[\\%_]/g, (c) => "\\" + c);
+    const { data: rows, error } = await client.from("teams").select("id,tournaments(id,name,game,status,champion_id,is_hidden,start_date,created_at)").ilike("name", like);
+    if (error) throw error;
+    const mine = (rows || []).filter(r => r.tournaments && (A.admin.on || !r.tournaments.is_hidden));
+    const ids = new Set(mine.map(r => r.id));
+    if (!ids.size) return '<div class="empty-state">Belum ada data.</div>';
+    const idList = [...ids].join(",");
+    const { data: ms, error: e2 } = await client.from("matches").select("id,tournament_id,round_name,team1_id,team2_id,score1,score2,winner_id,status,is_bye,scheduled_at,team1:teams!matches_team1_id_fkey(name),team2:teams!matches_team2_id_fkey(name)").or(`team1_id.in.(${idList}),team2_id.in.(${idList})`);
+    if (e2) throw e2;
+    const tById = Object.fromEntries(mine.map(r => [r.tournaments.id, r.tournaments]));
+    const done = (ms || []).filter(m => !m.is_bye && m.team1_id && m.team2_id && (m.status === "completed" || m.winner_id) && tById[m.tournament_id]);
+    let W = 0, L = 0, D = 0, gf = 0, ga = 0; const per = {};
+    const hist = done.map(m => {
+      const me = ids.has(m.team1_id) ? 1 : 2, my = me === 1 ? m.score1 : m.score2, op = me === 1 ? m.score2 : m.score1, opp = (me === 1 ? m.team2 : m.team1)?.name || "?";
+      const res = m.winner_id ? (ids.has(m.winner_id) ? "W" : "L") : "D";
+      if (res === "W") W++; else if (res === "L") L++; else D++;
+      gf += +my || 0; ga += +op || 0;
+      const t = (per[m.tournament_id] ||= { w: 0, l: 0 }); if (res === "W") t.w++; else if (res === "L") t.l++;
+      return { res, my: +my || 0, op: +op || 0, opp, t: tById[m.tournament_id].name, rn: m.round_name || "", at: m.scheduled_at || "" };
+    }).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 8);
+    const trophies = mine.filter(r => r.tournaments.champion_id === r.id).length, played = W + L + D;
+    const tl = [...mine].sort((a, b) => String(b.tournaments.start_date || b.tournaments.created_at || "").localeCompare(String(a.tournaments.start_date || a.tournaments.created_at || "")));
+    return `<div class="prof-stats"><div><b>${W}-${L}${D ? "-" + D : ""}</b><small>MATCH W-L${D ? "-D" : ""}</small></div><div><b>${played ? Math.round(W * 100 / played) : 0}%</b><small>WIN RATE</small></div><div><b>${gf}-${ga}</b><small>GAME MENANG-KALAH</small></div><div><b>🏆 ${trophies}</b><small>TROPHY</small></div></div>
+      <div class="eyebrow" style="margin-top:16px">TURNAMEN DIIKUTI (${tl.length})</div>
+      <ul class="prof-list">${tl.map(r => { const t = r.tournaments, st = per[t.id] || { w: 0, l: 0 }, champ = t.champion_id === r.id; return `<li><span>${champ ? "🏆 " : ""}<a href="tournament.html?id=${t.id}">${esc(t.name)}</a>${t.game ? ` <i>${esc(t.game)}</i>` : ""}</span><em class="${champ ? "gold" : ""}">${champ ? "JUARA" : esc((t.status || "").toUpperCase())} · ${st.w}-${st.l}</em></li>`; }).join("")}</ul>
+      <div class="eyebrow" style="margin-top:16px">RIWAYAT MATCH TERAKHIR</div>
+      <ul class="prof-list">${hist.map(h => `<li><span><b class="res ${h.res}">${h.res}</b> vs ${esc(h.opp)} <i>${esc(h.t)}${h.rn ? " · " + esc(h.rn) : ""}</i></span><em>${h.my} : ${h.op}</em></li>`).join("") || '<li class="muted-li">Belum ada match selesai.</li>'}</ul>`;
   }
   document.addEventListener("click", e => {
     const el = e.target.closest("[data-team]");

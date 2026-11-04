@@ -141,12 +141,12 @@
   function drawHybridLines() {
     const hy = document.querySelector("#bracket .hy"); if (!hy) return;
     hy.querySelectorAll(".hy-line").forEach(x => x.remove());
-    const box = hy.getBoundingClientRect(), card = (key) => { const c = hy.querySelector(`[data-hy="${key}"] .b-match`); return c && c.getBoundingClientRect(); };
+    const box = hy.getBoundingClientRect(), kz = (box.width / hy.offsetWidth) || 1, card = (key) => { const c = hy.querySelector(`[data-hy="${key}"] .b-match`); return c && c.getBoundingClientRect(); };
     const line = (x, y, w, h) => { const d = document.createElement("div"); d.className = "hy-line"; d.style.cssText = `left:${Math.round(x)}px;top:${Math.round(y)}px;width:${Math.max(2, Math.round(w))}px;height:${Math.max(2, Math.round(h))}px`; hy.appendChild(d); };
     // from -> to : keluar dari tepi kanan kartu asal, siku di tengah celah, masuk ke tepi kiri kartu tujuan
     const link = (from, to) => {
       const a = card(from), b = card(to); if (!a || !b) return;
-      const x1 = a.right - box.left, y1 = a.top + a.height / 2 - box.top, x2 = b.left - box.left, y2 = b.top + b.height / 2 - box.top, mx = (x1 + x2) / 2;
+      const x1 = (a.right - box.left) / kz, y1 = (a.top + a.height / 2 - box.top) / kz, x2 = (b.left - box.left) / kz, y2 = (b.top + b.height / 2 - box.top) / kz, mx = (x1 + x2) / 2;
       line(x1, y1 - 1, mx - x1 + 1, 2);
       if (Math.abs(y2 - y1) > 1) line(mx - 1, Math.min(y1, y2) - 1, 2, Math.abs(y2 - y1) + 2);
       line(mx, y2 - 1, x2 - mx, 2);
@@ -177,8 +177,27 @@
     if (hlTeam === el.dataset.team) { hlTeam = null; applyHl(); return; } // lanjut ke handler roster
     e.stopPropagation(); e.preventDefault(); hlTeam = el.dataset.team; applyHl();
   }, true);
-  window.addEventListener("resize", drawHybridLines);
-  if (window.ResizeObserver) new ResizeObserver(drawHybridLines).observe($("bracket"));
+  window.addEventListener("resize", () => applyZoom());
+  // Zoom bracket: AUTO (layar <=820px muat lebar layar), tombol − / + / FIT / klik persen = 100%. Pakai transform + sizer supaya scroll tetap benar.
+  const zoomEl = $("t-zoom"), sizer = $("t-zsize"), zs = { mode: "auto", k: 1, cur: 1 };
+  function applyZoom(force) {
+    if (!zoomEl || !sizer || !bw) return;
+    const W = zoomEl.scrollWidth, H = zoomEl.offsetHeight, avail = bw.clientWidth || W;
+    let k = force != null ? force : zs.mode === "fit" || (zs.mode === "auto" && window.innerWidth <= 820) ? Math.min(1, avail / W) : zs.mode === "auto" ? 1 : zs.k;
+    k = Math.max(.1, Math.min(1.5, k)); zs.cur = k;
+    zoomEl.style.transformOrigin = "0 0"; zoomEl.style.transform = k === 1 ? "" : `scale(${k})`;
+    sizer.style.width = Math.ceil(W * k) + "px"; sizer.style.height = Math.ceil(H * k) + "px";
+    const pc = $("t-zpct"); if (pc) pc.textContent = Math.round(k * 100) + "%";
+    drawHybridLines();
+  }
+  const zc = $("t-zoomctl");
+  if (zc) zc.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-z]"); if (!b) return; const z = b.dataset.z;
+    if (z === "fit") zs.mode = "fit"; else { zs.mode = "manual"; zs.k = z === "reset" ? 1 : zs.cur * (z === "in" ? 1.25 : .8); }
+    applyZoom();
+  });
+  window.__zoomExport = () => { applyZoom(1); bw.classList.add("exporting"); return () => { bw.classList.remove("exporting"); applyZoom(); }; }; // export PNG selalu 100% & tidak terpotong
+  if (window.ResizeObserver && zoomEl) new ResizeObserver(() => applyZoom()).observe(zoomEl);
   async function load() {
     const [{ data: t, error }, { data: ms }, { data: teams }] = await Promise.all([
       client.from("tournaments").select("*").eq("id", id).single(),
@@ -224,6 +243,7 @@
     // Perebutan Juara 3 (single elim / playoff grup): kartu terpisah di bawah bracket utama
     const thirdEl = $("t-third"), th = isDE ? null : ko.find(m => m.bracket_side === "third");
     if (thirdEl) { thirdEl.hidden = !th; thirdEl.innerHTML = th ? `<div class="eyebrow" style="margin:0 0 10px">PEREBUTAN JUARA 3 <small style="color:#777;margin-left:6px">BO${th._bo}</small></div><div class="third-card${A.admin.on && !useScorePanel ? " adm" : ""}">${bItem(th, A, useScorePanel)}</div>${th.winner_id ? `<div class="champion" style="margin-top:6px">🥉 JUARA 3 · <b data-team="${th.winner_id}" style="cursor:pointer">${esc((th.winner_id === th.team1_id ? th.team1 : th.team2)?.name || "")}</b></div>` : ""}` : ""; }
+    applyZoom();
     // Predictions (on/off dari setting turnamen)
     const pe = $("t-predict"); if (pe) { pe.hidden = !t.predictions_enabled; if (t.predictions_enabled) window.ARES.renderPredict($("t-predict-body"), t, teams || []); }
     applyHl();
@@ -270,6 +290,7 @@
     const b = e.target.closest("[data-export]"); if (!b) return;
     const target = document.getElementById(b.dataset.export); if (!target || !window.html2canvas) return alert("Export belum siap, coba lagi.");
     const old = b.innerHTML; b.innerHTML = "RENDERING…"; b.disabled = true;
+    const zoomBack = b.dataset.export === "t-bracket-wrap" && window.__zoomExport ? window.__zoomExport() : null;
     const imgs = [...target.querySelectorAll("img")], restore = [];
     try {
       // Fetch tiap logo jadi data-URL dulu — <img> biasa (tanpa crossorigin) gak bisa dibaca langsung oleh canvas.
@@ -285,7 +306,7 @@
       const canvas = await html2canvas(target, { backgroundColor: "#0b0c0e", scale: 2, useCORS: true, allowTaint: false, ignoreElements: (x) => x.hasAttribute("data-export") });
       const a = document.createElement("a"); a.download = `${(window.__t?.name || "ares").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${b.dataset.export}.png`; a.href = canvas.toDataURL("image/png"); a.click();
     } catch (err) { alert("Gagal export: " + (err.message || err)); }
-    finally { restore.forEach(([img, src]) => img.src = src); b.innerHTML = old; b.disabled = false; }
+    finally { restore.forEach(([img, src]) => img.src = src); if (zoomBack) zoomBack(); b.innerHTML = old; b.disabled = false; }
   });
   window.addEventListener("ares-admin", load);
   document.addEventListener("click", async (e) => {
