@@ -206,6 +206,7 @@
     <div class="admin-grid">
     <form class="a-card" id="tmf"><h3>${t.id ? "EDIT" : "ADD"} TEAM${cur && !t.id ? " → " + esc(cur.name) : ""}</h3>
       <div class="row2"><label>Nama tim<input name="name" required value="${esc(t.name)}"></label><label>Tag / Slogan<input name="tag" maxlength="120" value="${esc(t.tag)}"></label></div>
+      <div class="row2"><label>Kontak kapten (WA, untuk pengumuman)<input name="contact" maxlength="40" inputmode="tel" placeholder="08xxxxxxxxxx" value="${esc(t.contact)}"></label><span></span></div>
       <div class="row2"><label>Turnamen<select name="tournament_id">${tOpts(t.id ? t.tournament_id : selT, "— tanpa turnamen —")}</select></label><label>Logo tim<input name="logo" type="file" accept="image/*"></label></div>
       <div class="eyebrow" style="margin-top:8px">ROSTER · 5 UTAMA + MAKS 2 CADANGAN</div>${rows}
       <button class="btn-primary" type="submit">${t.id ? "SAVE TEAM" : "ADD TEAM"}</button>${t.id ? ' <button class="btn-ghost" type="button" id="tmcancel">CANCEL</button>' : ""}</form>
@@ -216,14 +217,16 @@
     $("tmf").onsubmit = (e) => { e.preventDefault(); run(async () => {
       const f = new FormData(e.target);
       const row = { name: f.get("name").trim(), tag: (f.get("tag") || "").trim() || null, tournament_id: f.get("tournament_id") || null };
+      const ct = (f.get("contact") || "").trim(); if (ct || t.contact) row.contact = ct || null;
       if (row.tournament_id && row.tournament_id !== t.tournament_id) {
         const tt = tournaments.find(z => z.id === row.tournament_id), n = teams.filter(z => z.tournament_id === row.tournament_id).length;
         if (tt?.max_teams && n >= tt.max_teams) throw new Error(`Turnamen penuh (${tt.max_teams} tim).`);
       }
       const lf = f.get("logo"); if (lf?.size) row.logo_url = await safeUpload(lf, "teams");
       let id = t.id;
-      if (id) { const { error } = await sb.from("teams").update(row).eq("id", id); if (error) throw error; }
-      else { const { data, error } = await sb.from("teams").insert(row).select("id").single(); if (error) throw error; id = data.id; }
+      const cErr = (er) => /contact/i.test(er.message || "") && /column|schema cache/i.test(er.message || "") ? new Error("Kolom kontak belum ada di database. Jalankan supabase/update-announcements.sql di Supabase SQL Editor dulu.") : er;
+      if (id) { const { error } = await sb.from("teams").update(row).eq("id", id); if (error) throw cErr(error); }
+      else { const { data, error } = await sb.from("teams").insert(row).select("id").single(); if (error) throw cErr(error); id = data.id; }
       const cap = f.get("cap"), pl = [];
       for (let i = 0; i < 7; i++) { const n = (f.get("nick" + i) || "").trim(); if (!n) continue;
         pl.push({ team_id: id, nickname: n, role: f.get("role" + i) || null, is_sub: i >= 5, is_captain: i < 5 && cap === String(i), sort_order: i }); }
@@ -248,6 +251,7 @@
     $("panel").innerHTML = `<div class="a-card"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><h3>MATCHES</h3><div style="display:flex;gap:8px">${editableCount ? '<button type="button" class="btn-primary sm" id="saveallm">SAVE ALL</button>' : ""}${(ms || []).length ? '<button type="button" class="btn-ghost" id="resetall" style="border-color:#a33;color:#ff8a91">RESET SEMUA SKOR</button>' : ""}</div></div><label style="max-width:360px">Turnamen<select id="msel">${tOpts(selT)}</select></label>
       ${cur ? `<small style="color:#888;display:block">Status match ikut status turnamen (${esc(cur.status)}). Match otomatis Completed saat skor menang tercapai (knockout: Final Bo5, Semi Final Bo3, lainnya Bo1; Hybrid MPL: Lower Final & Grand Final Bo7, lainnya Bo5; liga/grup sesuai Bo yang dipilih — Bo2 boleh seri).</small>` : ""}
       ${(ms || []).some(m => !m.is_bye) ? `<div class="sched-box"><strong>AUTO-ISI JADWAL</strong><label>Mulai<input type="datetime-local" id="as-start"></label><label>Jeda tiap match (menit)<div class="combo"><input type="number" id="as-gap" min="1" value="60"><select id="as-quick" title="Pilih cepat">${["Cepat", 30, 45, 60, 90, 120, 180].map((n, i) => `<option value="${i ? n : ""}">${n}</option>`).join("")}</select></div></label><label class="chk"><input type="checkbox" id="as-over"> Timpa jadwal yang sudah ada</label><button type="button" class="btn-primary sm" id="as-go">ISI JADWAL</button><small>Urut nomor match (M1, M2, …). Match BYE &amp; yang sudah selesai dilewati.</small></div>` : ""}
+      ${(ms || []).some(m => !m.is_bye && m.team1_id && m.team2_id) ? annHtml(ms) : ""}
       ${Object.keys(byRound).sort().map(r => `<div class="eyebrow" style="margin:22px 0 10px">${esc(byRound[r][0].round_name)} · BO${byRound[r][0]._bo}</div>${byRound[r].map(m => { const ok = !m.is_bye && m.team1_id && m.team2_id; return `<div class="m-row" data-id="${m.id}">
         <div class="m-no">${m.is_bye ? "BYE" : "M" + m._no}</div><div class="m-team">${esc(m.team1?.name || m._ph1 || "TBD")}</div>
         ${ok ? `<select class="sc2" name="sc">${ARES.scoreOpts(m)}</select>` : `<span class="m-st">—</span>`}
@@ -268,6 +272,7 @@
         toast(`${list.length} match dijadwalkan, jeda ${gap} menit`); renderMatches();
       }, e.currentTarget);
     }
+    if ($("ann")) annBind(ms, cur);
     if ($("resetall")) $("resetall").onclick = (e) => { if (!confirm("Reset SEMUA skor turnamen ini? Skor, pemenang, dan juara dihapus (bracket awal tetap).")) return; run(async () => { const n = await ARES.resetScores(selT); toast(`${n} match direset`); renderMatches(); }, e.currentTarget); };
     if ($("saveallm")) $("saveallm").onclick = async (e) => {
       const btn = e.currentTarget, rows = [...document.querySelectorAll(".m-row")].filter(r => r.querySelector(".sc2"));
@@ -278,6 +283,44 @@
       renderMatches();
     };
     $("panel").onclick = (e) => { const b = e.target.closest("[data-save]"); if (!b) return; run(() => saveMatch(ms.find(x => x.id === b.closest(".m-row").dataset.id), b.closest(".m-row")), b); };
+  }
+
+  // ---------- Pengumuman WhatsApp ----------
+  const annLS = (k, v) => { try { if (v === undefined) return localStorage.getItem("ares_ann_" + k); localStorage.setItem("ares_ann_" + k, v); } catch (_) {} return null; };
+  function annHtml(ms) {
+    const stages = [...new Set(ms.filter(m => !m.is_bye && m.team1_id && m.team2_id).map(m => m.round_name))];
+    return `<details class="sched-box ann-box" id="ann"><summary>PENGUMUMAN WHATSAPP · teks siap salin</summary>
+      <div class="ann-ctl"><label>Jenis<select id="ann-mode"><option value="schedule">Jadwal match (belum selesai)</option><option value="result">Hasil match (selesai)</option></select></label>
+      <label>Stage<select id="ann-stage"><option value="">Semua stage</option>${stages.map(x => `<option>${esc(x)}</option>`).join("")}</select></label>
+      <label>Judul<input id="ann-title" maxlength="80"></label><label>Penutup<input id="ann-close" maxlength="120" placeholder="Good luck to all teams!"></label>
+      <label class="chk"><input type="checkbox" id="ann-merge"> Gabung semua jam jadi 1 pesan</label></div>
+      <div id="ann-out"><div class="empty-state">Memuat…</div></div><small>Match diurut jam &amp; dikelompokkan per jam yang sama (1 pesan per jam). Kapten &amp; kontak diambil dari data tim (isi kontak di menu Teams).</small></details>`;
+  }
+  function annBind(ms, cur) {
+    const box = $("ann"); let info = null, loaded = false;
+    $("ann-title").value = annLS("title:" + selT) || (cur?.name || "TOURNAMENT").toUpperCase();
+    $("ann-close").value = annLS("close") || "";
+    $("ann-merge").checked = annLS("merge") === "1";
+    const load = async () => {
+      if (loaded) return; loaded = true; info = {};
+      const ids = [...new Set(ms.flatMap(m => [m.team1_id, m.team2_id]).filter(Boolean))]; if (!ids.length) return;
+      let tr = await sb.from("teams").select("id,contact").in("id", ids), noContact = false;
+      if (tr.error) { noContact = true; tr = { data: [] }; }
+      (tr.data || []).forEach(x => { (info[x.id] ||= {}).contact = x.contact; });
+      const { data: pl } = await sb.from("players").select("team_id,nickname").in("team_id", ids).eq("is_captain", true);
+      (pl || []).forEach(x => { (info[x.team_id] ||= {}).captain = x.nickname; });
+      if (noContact) toast("Kolom kontak belum ada — jalankan supabase/update-announcements.sql", true);
+    };
+    const draw = () => {
+      annLS("close", $("ann-close").value); annLS("merge", $("ann-merge").checked ? "1" : "0"); annLS("title:" + selT, $("ann-title").value);
+      const res = ARES_ANN.build(ms, info || {}, { mode: $("ann-mode").value, stage: $("ann-stage").value, title: $("ann-title").value.trim() || "TOURNAMENT", closing: $("ann-close").value.trim(), merge: $("ann-merge").checked });
+      $("ann-out").innerHTML = res.length ? res.map((r, i) => `<div class="ann-msg"><div class="ann-h"><b>PESAN ${i + 1}</b> · ${esc(r.label)}<span><button type="button" class="btn-primary sm" data-copy="${i}">SALIN</button> <a class="btn-ghost sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(r.text)}">BUKA WA</a></span></div><textarea readonly rows="9">${esc(r.text)}</textarea></div>`).join("") : '<div class="empty-state">Tidak ada match untuk pilihan ini.</div>';
+      $("ann-out").onclick = async (e) => { const b = e.target.closest("[data-copy]"); if (!b) return; const txt = res[+b.dataset.copy].text;
+        try { await navigator.clipboard.writeText(txt); } catch (_) { const ta = b.closest(".ann-msg").querySelector("textarea"); ta.select(); document.execCommand("copy"); }
+        b.textContent = "TERSALIN ✓"; setTimeout(() => { b.textContent = "SALIN"; }, 1500); };
+    };
+    box.querySelectorAll("select,input").forEach(el => el.addEventListener("input", draw));
+    box.addEventListener("toggle", async () => { if (box.open) { await load(); draw(); } });
   }
 
   async function saveMatch(m, el, silent) {
