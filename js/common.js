@@ -84,7 +84,7 @@
     const ids = new Set(mine.map(r => r.id));
     if (!ids.size) return '<div class="empty-state">Belum ada data.</div>';
     const idList = [...ids].join(",");
-    const { data: ms, error: e2 } = await client.from("matches").select("id,tournament_id,round_name,team1_id,team2_id,score1,score2,winner_id,status,is_bye,scheduled_at,team1:teams!matches_team1_id_fkey(name),team2:teams!matches_team2_id_fkey(name)").or(`team1_id.in.(${idList}),team2_id.in.(${idList})`);
+    const { data: ms, error: e2 } = await client.from("matches").select("id,tournament_id,round,position,stage,bracket_side,round_name,team1_id,team2_id,score1,score2,winner_id,status,is_bye,scheduled_at,team1:teams!matches_team1_id_fkey(name),team2:teams!matches_team2_id_fkey(name)").or(`team1_id.in.(${idList}),team2_id.in.(${idList})`);
     if (e2) throw e2;
     const tById = Object.fromEntries(mine.map(r => [r.tournaments.id, r.tournaments]));
     const done = (ms || []).filter(m => !m.is_bye && m.team1_id && m.team2_id && (m.status === "completed" || m.winner_id) && tById[m.tournament_id]);
@@ -95,8 +95,12 @@
       if (res === "W") W++; else if (res === "L") L++; else D++;
       gf += +my || 0; ga += +op || 0;
       const t = (per[m.tournament_id] ||= { w: 0, l: 0 }); if (res === "W") t.w++; else if (res === "L") t.l++;
-      return { res, my: +my || 0, op: +op || 0, opp, t: tById[m.tournament_id].name, rn: m.round_name || "", at: m.scheduled_at || "" };
-    }).sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
+      // Urutan "terbaru dimainkan": turnamen terbaru dulu; dalam turnamen sama → jadwal (kalau ada), lalu urutan babak (Final paling akhir).
+      const sd = m.bracket_side, lg = m.stage === "league" || m.stage === "group";
+      const prog = lg ? m.round : 1000 + (sd === "final" ? 900 : sd === "third" ? 899 : sd === "losers" ? (m.round + 2) * 10 : sd === "winners" ? (m.round + 1) * 10 + 1 : m.round * 10);
+      const tt = tById[m.tournament_id];
+      return { res, my: +my || 0, op: +op || 0, opp, t: tt.name, rn: m.round_name || "", at: m.scheduled_at || "", tk: String(tt.start_date || tt.created_at || ""), tid: m.tournament_id, prog, pos: m.position || 0 };
+    }).sort((a, b) => b.tk.localeCompare(a.tk) || (a.tid === b.tid && a.at && b.at ? String(b.at).localeCompare(String(a.at)) : 0) || b.prog - a.prog || b.pos - a.pos).slice(0, 5);
     const trophies = mine.filter(r => r.tournaments.champion_id === r.id).length, played = W + L + D;
     const tl = [...mine].sort((a, b) => String(b.tournaments.start_date || b.tournaments.created_at || "").localeCompare(String(a.tournaments.start_date || a.tournaments.created_at || "")));
     return `<div class="prof-stats"><div><b>${W}-${L}${D ? "-" + D : ""}</b><small>MATCH W-L${D ? "-D" : ""}</small></div><div><b>${played ? Math.round(W * 100 / played) : 0}%</b><small>WIN RATE</small></div><div><b>${gf}-${ga}</b><small>GAME MENANG-KALAH</small></div><div><b><i class="ico ico-trophy"></i> ${trophies}</b><small>TROPHY</small></div></div>
