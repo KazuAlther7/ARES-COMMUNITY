@@ -56,6 +56,6 @@
     }
     wr(SENT, sent);
   }
-  if (supported()) { setInterval(poll, 60000); setTimeout(() => { if (list().length && Notification.permission === "granted") { getReg(); poll(); } }, 3000); }
+  if (supported()) { setInterval(poll, 60000); setTimeout(() => { if (list().length && Notification.permission === "granted") { getReg(); poll(); sync().catch(() => {}); } }, 3000); }
   window.ARES_PUSH = { follow, unfollow, isFollowing, list, supported, poll, real: () => !!cfg().VAPID_PUBLIC_KEY };
 })();
