@@ -56,7 +56,11 @@
     body.innerHTML = `<div class="roster-head">${logo(team, "xl")}<div><h3>${esc(team.name)}</h3>${team.tag ? `<p class="slogan">“${esc(team.tag)}”</p>` : ""}${team.tournaments?.name ? `<small>${esc(team.tournaments.name)}</small>` : ""}</div></div>
       <div class="eyebrow">STARTING ROSTER</div><ul class="roster">${main.map(row).join("") || '<li class="muted-li">Roster belum diisi.</li>'}</ul>
       ${subs.length ? `<div class="eyebrow" style="margin-top:18px">SUBSTITUTES</div><ul class="roster">${subs.map(row).join("")}</ul>` : ""}
-      <button type="button" class="prof-btn" data-prof><i class="ico ico-stats"></i> PROFIL &amp; RIWAYAT TIM</button><div class="prof" id="prof-box" hidden></div>`;
+      <button type="button" class="prof-btn" data-prof><i class="ico ico-stats"></i> PROFIL &amp; RIWAYAT TIM</button><div class="prof" id="prof-box" hidden></div>
+      ${window.ARES_PUSH?.supported() ? '<button type="button" class="prof-btn fol-btn" data-fol></button><small class="fol-note" hidden></small>' : ""}`;
+    const fb = body.querySelector("[data-fol]");
+    if (fb) { const nt = body.querySelector(".fol-note"), paint = () => { const on = ARES_PUSH.isFollowing(team.name); fb.classList.toggle("on", on); fb.textContent = on ? "MENGIKUTI · NOTIF 5 MENIT SEBELUM MATCH" : "IKUTI TIM · NOTIF 5 MENIT SEBELUM MATCH"; }; paint();
+      fb.onclick = async () => { nt.hidden = true; try { if (ARES_PUSH.isFollowing(team.name)) await ARES_PUSH.unfollow(team.name); else { await ARES_PUSH.follow(team.name); if (!ARES_PUSH.real()) { nt.textContent = "Notifikasi muncul selama situs ini terbuka."; nt.hidden = false; } } } catch (e) { nt.textContent = e.message || String(e); nt.hidden = false; } paint(); }; }
     // Profil tim: dibuka (dan dimuat) hanya saat tombol diklik. Tim yg sama di banyak turnamen = baris teams berbeda → digabung lewat nama.
     const pb = body.querySelector("[data-prof]"), box = body.querySelector("#prof-box");
     pb.onclick = async () => {
